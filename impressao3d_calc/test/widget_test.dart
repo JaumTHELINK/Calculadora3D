@@ -1,30 +1,29 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:impressao3d_calc/main.dart';
+import 'package:impressao3d_calc/models/financeiro_model.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const Impressao3DApp());
+  test('serializa e desserializa transacao com campos de venda', () {
+    final transacao = Transacao(
+      id: 't1',
+      data: DateTime(2026, 4, 3),
+      tipo: TipoTransacao.receita,
+      categoria: 'Venda de peça',
+      valor: 99.9,
+      descricao: 'Venda Etsy',
+      idHistorico: 'h1',
+      nomeHistorico: 'Suporte Camera',
+      quantidadePecas: 4,
+      pesoFilamentoConsumidoG: 180.5,
+    );
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    final map = transacao.toJson();
+    final restaurada = Transacao.fromJson(map);
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(restaurada.id, 't1');
+    expect(restaurada.tipo, TipoTransacao.receita);
+    expect(restaurada.categoria, 'Venda de peça');
+    expect(restaurada.quantidadePecas, 4);
+    expect(restaurada.pesoFilamentoConsumidoG, closeTo(180.5, 0.0001));
+    expect(restaurada.idHistorico, 'h1');
   });
 }

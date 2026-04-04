@@ -39,12 +39,14 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   int _index = 0;
+  final _financeiroKey = GlobalKey<FinanceiroScreenState>();
 
-  final _pages = const [CalculatorScreen(), FinanceiroScreen()];
+  late final List<Widget> _pages;
 
   @override
   void initState() {
     super.initState();
+    _pages = [CalculatorScreen(), FinanceiroScreen(key: _financeiroKey)];
     WidgetsBinding.instance.addObserver(this);
     // Tenta login silencioso ao abrir
     BackupService.signInSilently();
@@ -64,6 +66,17 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
       Future.delayed(const Duration(milliseconds: 500), () {
         BackupService.fazerBackup();
       });
+      return;
+    }
+
+    if (state == AppLifecycleState.resumed) {
+      _recarregarFinanceiroSeAtivo();
+    }
+  }
+
+  void _recarregarFinanceiroSeAtivo() {
+    if (_index == 1) {
+      _financeiroKey.currentState?.recarregarDados();
     }
   }
 
@@ -73,7 +86,12 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
       body: IndexedStack(index: _index, children: _pages),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
-        onDestinationSelected: (i) => setState(() => _index = i),
+        onDestinationSelected: (i) {
+          setState(() => _index = i);
+          if (i == 1) {
+            _recarregarFinanceiroSeAtivo();
+          }
+        },
         backgroundColor: Colors.white,
         indicatorColor: const Color(0xFF6C3CE1).withOpacity(0.12),
         destinations: const [
