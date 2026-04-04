@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "324277956609",
+    "project_id": "calculadora3d-491902",
+    "storage_bucket": "calculadora3d-491902.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:324277956609:android:3817d4e62d2114a7515000",
+        "android_client_info": {
+          "package_name": "com.example.impressao3d_calc"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAuXsIR2RPu2fccyKr4kYyJwdB_x5mzA6c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
