@@ -18,6 +18,7 @@ class FinanceiroScreenState extends State<FinanceiroScreen>
   List<Transacao> _transacoes = [];
   bool _loading = true;
   late DateTime _mesSelecionado;
+  int _estoqueReloadToken = 0;
 
   @override
   void initState() {
@@ -35,10 +36,13 @@ class FinanceiroScreenState extends State<FinanceiroScreen>
   }
 
   Future<void> _carregar() async {
+    if (!mounted) return;
     setState(() => _loading = true);
     final t = await FinanceiroService.carregarTransacoes();
+    if (!mounted) return;
     setState(() {
       _transacoes = t;
+      _estoqueReloadToken++;
       _loading = false;
     });
   }
@@ -92,7 +96,8 @@ class FinanceiroScreenState extends State<FinanceiroScreen>
                             t.data.month == _mesSelecionado.month)
                         .toList(),
                     onRefresh: _carregar),
-                const EstoqueScreen(embedded: true),
+                EstoqueScreen(
+                    key: ValueKey(_estoqueReloadToken), embedded: true),
               ])),
             ]),
       floatingActionButton: AnimatedBuilder(
@@ -110,7 +115,7 @@ class FinanceiroScreenState extends State<FinanceiroScreen>
                   backgroundColor: const Color(0xFF059669),
                   foregroundColor: Colors.white,
                   icon: const Icon(Icons.add_rounded),
-                  label: const Text('Novo carretel'));
+                  label: const Text('Novo item'));
             return Column(mainAxisSize: MainAxisSize.min, children: [
               FloatingActionButton(
                   heroTag: 'fab_despesa',

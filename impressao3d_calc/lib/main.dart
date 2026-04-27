@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'screens/calculator_screen.dart';
 import 'screens/financeiro_screen.dart';
+import 'screens/pedidos_screen.dart';
 import 'services/backup_service.dart';
 
 void main() {
@@ -40,13 +41,18 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   int _index = 0;
   final _financeiroKey = GlobalKey<FinanceiroScreenState>();
+  final _pedidosKey = GlobalKey<PedidosScreenState>();
 
   late final List<Widget> _pages;
 
   @override
   void initState() {
     super.initState();
-    _pages = [CalculatorScreen(), FinanceiroScreen(key: _financeiroKey)];
+    _pages = [
+      CalculatorScreen(),
+      PedidosScreen(key: _pedidosKey),
+      FinanceiroScreen(key: _financeiroKey)
+    ];
     WidgetsBinding.instance.addObserver(this);
     // Tenta login silencioso ao abrir
     BackupService.signInSilently();
@@ -71,12 +77,19 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
 
     if (state == AppLifecycleState.resumed) {
       _recarregarFinanceiroSeAtivo();
+      _recarregarPedidosSeAtivo();
     }
   }
 
   void _recarregarFinanceiroSeAtivo() {
-    if (_index == 1) {
+    if (_index == 2) {
       _financeiroKey.currentState?.recarregarDados();
+    }
+  }
+
+  void _recarregarPedidosSeAtivo() {
+    if (_index == 1) {
+      _pedidosKey.currentState?.recarregarDados();
     }
   }
 
@@ -88,8 +101,11 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
         selectedIndex: _index,
         onDestinationSelected: (i) {
           setState(() => _index = i);
-          if (i == 1) {
+          if (i == 2) {
             _recarregarFinanceiroSeAtivo();
+          }
+          if (i == 1) {
+            _recarregarPedidosSeAtivo();
           }
         },
         backgroundColor: Colors.white,
@@ -100,6 +116,12 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
             selectedIcon:
                 Icon(Icons.view_in_ar_rounded, color: Color(0xFF6C3CE1)),
             label: 'Calculadora',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.assignment_outlined),
+            selectedIcon:
+                Icon(Icons.assignment_rounded, color: Color(0xFF6C3CE1)),
+            label: 'Pedidos',
           ),
           NavigationDestination(
             icon: Icon(Icons.account_balance_wallet_outlined),

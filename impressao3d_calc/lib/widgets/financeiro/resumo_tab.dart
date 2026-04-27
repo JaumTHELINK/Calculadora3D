@@ -12,6 +12,7 @@ class ResumoTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final resumoGeral = FinanceiroService.resumoGeral(transacoes);
     final hist6 = FinanceiroService.historico6Meses(transacoes);
     final categorias = FinanceiroService.despesasPorCategoria(transacoes, mesSelecionado.year, mesSelecionado.month);
     final saldo = resumo['saldo']!;
@@ -21,6 +22,38 @@ class ResumoTab extends StatelessWidget {
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
       child: Column(children: [
+        // Totais Históricos
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1F2937),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.white10)
+          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('📊 Totais Históricos', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white70)),
+            const SizedBox(height: 12),
+            Row(children: [
+              Expanded(child: _summaryCardDark('Receitas', resumoGeral['receitas']!, const Color(0xFF34D399), Icons.arrow_upward_rounded)),
+              const SizedBox(width: 10),
+              Expanded(child: _summaryCardDark('Despesas', resumoGeral['despesas']!, const Color(0xFFFCA5A5), Icons.arrow_downward_rounded)),
+            ]),
+            const SizedBox(height: 10),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              const Text('Saldo total', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white70)),
+              Text(_fmt(resumoGeral['saldo']!),
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: resumoGeral['saldo']! >= 0 ? const Color(0xFF34D399) : const Color(0xFFFCA5A5)
+                )),
+            ]),
+          ]),
+        ),
+        const SizedBox(height: 20),
+        // Resumo do Mês
+        Text('Resumo do Mês', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF555577))),
+        const SizedBox(height: 8),
         Row(children: [
           Expanded(child: _summaryCard('Receitas', receitas, const Color(0xFF059669), Icons.arrow_upward_rounded)),
           const SizedBox(width: 10),
@@ -71,6 +104,24 @@ class ResumoTab extends StatelessWidget {
       const SizedBox(height: 6),
       Text(_fmt(valor), style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: cor)),
     ]));
+
+  Widget _summaryCardDark(String label, double valor, Color cor, IconData icon) => Container(
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: Colors.white.withOpacity(0.05),
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: cor.withOpacity(0.2))
+    ),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        Icon(icon, color: cor, size: 14),
+        const SizedBox(width: 5),
+        Text(label, style: TextStyle(color: cor, fontSize: 11, fontWeight: FontWeight.w600))
+      ]),
+      const SizedBox(height: 4),
+      Text(_fmt(valor), style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: cor)),
+    ]));
+
 
   Widget _saldoCard(double saldo) {
     final positivo = saldo >= 0;

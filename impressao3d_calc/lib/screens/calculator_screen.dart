@@ -40,15 +40,20 @@ class _CalculatorScreenState extends State<CalculatorScreen>
   final _taxaIVACtrl = TextEditingController();
   final _depreciacaoCtrl = TextEditingController();
   final _margemCtrl = TextEditingController(text: '50');
+  final _precoAlvoCtrl = TextEditingController();
   final _qtdLoteCtrl = TextEditingController(text: '1');
 
   final List<TextEditingController> _corNomeCtrlList = [];
   final List<TextEditingController> _corPesoCtrlList = [];
   final List<TextEditingController> _corCustoKgCtrlList = [];
   final List<String> _corMaterialList = [];
+  final List<String?> _corCarretelSelecionadoIdList = [];
   final List<TextEditingController> _extraNomeCtrlList = [];
   final List<TextEditingController> _extraValorCtrlList = [];
+  final List<TextEditingController> _extraQtdCtrlList = [];
+  final List<String?> _extraEstoqueSelecionadoIdList = [];
   List<EstoqueFilamento> _estoqueFilamentos = [];
+  List<EstoqueMaterialExtra> _estoqueMateriaisExtras = [];
   String? _carretelSelecionadoId;
 
   int _qtdLote = 1;
@@ -59,6 +64,7 @@ class _CalculatorScreenState extends State<CalculatorScreen>
     _tabController = TabController(length: 2, vsync: this);
     _carregarPreferencias();
     _carregarEstoqueFilamentos();
+    _carregarEstoqueMateriaisExtras();
   }
 
   @override
@@ -79,6 +85,7 @@ class _CalculatorScreenState extends State<CalculatorScreen>
       _taxaIVACtrl,
       _depreciacaoCtrl,
       _margemCtrl,
+      _precoAlvoCtrl,
       _qtdLoteCtrl
     ]) {
       c.dispose();
@@ -88,7 +95,8 @@ class _CalculatorScreenState extends State<CalculatorScreen>
       ..._corPesoCtrlList,
       ..._corCustoKgCtrlList,
       ..._extraNomeCtrlList,
-      ..._extraValorCtrlList
+      ..._extraValorCtrlList,
+      ..._extraQtdCtrlList,
     ]) {
       c.dispose();
     }
@@ -116,6 +124,7 @@ class _CalculatorScreenState extends State<CalculatorScreen>
               taxaFixa: pl.taxaFixa,
               ativa: false))
           .toList();
+      _sincronizarPrecoAlvoComMargem();
       _update();
     });
   }
@@ -138,6 +147,55 @@ class _CalculatorScreenState extends State<CalculatorScreen>
     PreferenciasService.salvarDepreciacao(_model.custoDepreciacao);
   }
 
+  PlataformaConfig _plataformaAtivaAtual() =>
+      _model.plataformas.firstWhere((p) => p.ativa,
+          orElse: () => PlataformaConfig(nome: '', taxa: 0));
+
+  bool _temPlataformaAtiva() => _plataformaAtivaAtual().nome.isNotEmpty;
+
+  double _precoAlvoAtual() {
+    final plat = _plataformaAtivaAtual();
+    return _temPlataformaAtiva()
+        ? _model.precoComPlataforma(
+            _model.margemPersonalizada, plat.taxa, plat.taxaFixa)
+        : _model.precoPersonalizadoComIVA;
+  }
+
+  double? _margemAposPrecoAlvo(double precoAlvo) {
+    if (precoAlvo <= 0 || _model.custoTotalSemMargem <= 0) return null;
+
+    final plat = _plataformaAtivaAtual();
+    final liquidoAposPlataforma = _temPlataformaAtiva()
+        ? (precoAlvo * (1 - plat.taxa / 100.0)) - plat.taxaFixa
+        : precoAlvo;
+    if (liquidoAposPlataforma <= 0) return null;
+
+    final custoComImposto =
+        _model.custoTotalSemMargem * (1 + _model.taxaIVA / 100.0);
+    final margem = (1 - (custoComImposto / liquidoAposPlataforma)) * 100.0;
+    return margem;
+  }
+
+  void _sincronizarPrecoAlvoComMargem() {
+    final preco = _precoAlvoAtual();
+    _precoAlvoCtrl.text = preco > 0 ? _fmtP(preco) : '';
+    _atualizarMargemAPartirDoPrecoAlvo();
+  }
+
+  void _atualizarMargemAPartirDoPrecoAlvo() {
+    final preco = double.tryParse(_precoAlvoCtrl.text.replaceAll(',', '.'));
+    final margem = preco == null ? null : _margemAposPrecoAlvo(preco);
+    setState(() {
+      if (margem != null) {
+        _model.margemPersonalizada = margem;
+        _margemCtrl.text =
+            margem.isFinite ? '${margem.toStringAsFixed(1)}%' : '--';
+      } else {
+        _margemCtrl.text = '--';
+      }
+    });
+  }
+
   void _agendarSalvarPreferencias() {
     _prefsDebounce?.cancel();
     _prefsDebounce =
@@ -149,9 +207,31 @@ class _CalculatorScreenState extends State<CalculatorScreen>
     if (!mounted) return;
     setState(() {
       _estoqueFilamentos = estoque.where((e) => !e.esgotado).toList();
+      final idsDisponiveis = _estoqueFilamentos.map((e) => e.id).toSet();
       if (_carretelSelecionadoId != null &&
           !_estoqueFilamentos.any((e) => e.id == _carretelSelecionadoId)) {
         _carretelSelecionadoId = null;
+      }
+      for (var i = 0; i < _corCarretelSelecionadoIdList.length; i++) {
+        final id = _corCarretelSelecionadoIdList[i];
+        if (id != null && !idsDisponiveis.contains(id)) {
+          _corCarretelSelecionadoIdList[i] = null;
+        }
+      }
+    });
+  }
+
+  Future<void> _carregarEstoqueMateriaisExtras() async {
+    final estoque = await FinanceiroService.carregarEstoqueMateriaisExtras();
+    if (!mounted) return;
+    setState(() {
+      _estoqueMateriaisExtras = estoque.where((e) => !e.esgotado).toList();
+      final idsDisponiveis = _estoqueMateriaisExtras.map((e) => e.id).toSet();
+      for (var i = 0; i < _extraEstoqueSelecionadoIdList.length; i++) {
+        final id = _extraEstoqueSelecionadoIdList[i];
+        if (id != null && !idsDisponiveis.contains(id)) {
+          _extraEstoqueSelecionadoIdList[i] = null;
+        }
       }
     });
   }
@@ -165,6 +245,79 @@ class _CalculatorScreenState extends State<CalculatorScreen>
       _custoPorKgCtrl.text = _fmtP(carretel.custoPorG * 1000);
     });
     _update();
+  }
+
+  void _aplicarCarretelEstoqueNaCor(int i, String? id) {
+    setState(() {
+      if (i >= _corCarretelSelecionadoIdList.length) return;
+      _corCarretelSelecionadoIdList[i] = id;
+      if (id == null) return;
+
+      final carretel = _estoqueFilamentos.firstWhere((e) => e.id == id);
+      if (i < _corMaterialList.length) {
+        _corMaterialList[i] = carretel.material;
+      }
+      if (i < _corCustoKgCtrlList.length) {
+        _corCustoKgCtrlList[i].text = _fmtP(carretel.custoPorG * 1000);
+      }
+    });
+    _update();
+  }
+
+  List<EstoqueFilamento> _carreteisOrdenadosParaCor(int i) {
+    final materialAtual =
+        i < _corMaterialList.length ? _corMaterialList[i].trim() : '';
+    final lista = [..._estoqueFilamentos];
+    if (materialAtual.isEmpty) return lista;
+
+    lista.sort((a, b) {
+      final aPrioritario = a.material == materialAtual ? 0 : 1;
+      final bPrioritario = b.material == materialAtual ? 0 : 1;
+      if (aPrioritario != bPrioritario) {
+        return aPrioritario.compareTo(bPrioritario);
+      }
+
+      final porMaterial = a.material.compareTo(b.material);
+      if (porMaterial != 0) return porMaterial;
+
+      return a.cor.compareTo(b.cor);
+    });
+
+    return lista;
+  }
+
+  void _aplicarMaterialExtraDoEstoque(int i, String? id) {
+    setState(() {
+      if (i >= _extraEstoqueSelecionadoIdList.length) return;
+      _extraEstoqueSelecionadoIdList[i] = id;
+      if (id == null) return;
+
+      final item = _estoqueMateriaisExtras.firstWhere((e) => e.id == id);
+      if (i < _extraNomeCtrlList.length) {
+        _extraNomeCtrlList[i].text = item.nome;
+      }
+      _recalcularCustoExtraDoEstoque(i);
+    });
+    _update();
+  }
+
+  void _recalcularCustoExtraDoEstoque(int i) {
+    if (i >= _extraEstoqueSelecionadoIdList.length ||
+        i >= _extraValorCtrlList.length ||
+        i >= _extraQtdCtrlList.length) {
+      return;
+    }
+
+    final id = _extraEstoqueSelecionadoIdList[i];
+    if (id == null) return;
+
+    final idx = _estoqueMateriaisExtras.indexWhere((e) => e.id == id);
+    if (idx < 0) return;
+
+    final qtd = int.tryParse(_extraQtdCtrlList[i].text) ?? 1;
+    final qtdValida = qtd <= 0 ? 1 : qtd;
+    final custo = _estoqueMateriaisExtras[idx].valorUnitario * qtdValida;
+    _extraValorCtrlList[i].text = _fmtP(custo);
   }
 
   void _update() {
@@ -195,8 +348,15 @@ class _CalculatorScreenState extends State<CalculatorScreen>
           _extraNomeCtrlList.length,
           (i) => MaterialExtra(
               nome: _extraNomeCtrlList[i].text,
-              custo: double.tryParse(_extraValorCtrlList[i].text) ?? 0));
+              custo: double.tryParse(_extraValorCtrlList[i].text) ?? 0,
+              idEstoqueMaterialExtra: i < _extraEstoqueSelecionadoIdList.length
+                  ? _extraEstoqueSelecionadoIdList[i]
+                  : null,
+              quantidadeUnidades: i < _extraQtdCtrlList.length
+                  ? (int.tryParse(_extraQtdCtrlList[i].text) ?? 1)
+                  : 1));
     });
+    _atualizarMargemAPartirDoPrecoAlvo();
     _agendarSalvarPreferencias();
   }
 
@@ -207,6 +367,7 @@ class _CalculatorScreenState extends State<CalculatorScreen>
       _corCustoKgCtrlList
           .add(TextEditingController(text: _custoPorKgCtrl.text));
       _corMaterialList.add(_model.materialSelecionado);
+      _corCarretelSelecionadoIdList.add(null);
     });
   }
 
@@ -219,6 +380,7 @@ class _CalculatorScreenState extends State<CalculatorScreen>
       _corPesoCtrlList.removeAt(i);
       _corCustoKgCtrlList.removeAt(i);
       _corMaterialList.removeAt(i);
+      _corCarretelSelecionadoIdList.removeAt(i);
       _update();
     });
   }
@@ -226,14 +388,19 @@ class _CalculatorScreenState extends State<CalculatorScreen>
   void _addExtra() => setState(() {
         _extraNomeCtrlList.add(TextEditingController());
         _extraValorCtrlList.add(TextEditingController());
+        _extraQtdCtrlList.add(TextEditingController(text: '1'));
+        _extraEstoqueSelecionadoIdList.add(null);
       });
 
   void _removeExtra(int i) {
     setState(() {
       _extraNomeCtrlList[i].dispose();
       _extraValorCtrlList[i].dispose();
+      _extraQtdCtrlList[i].dispose();
       _extraNomeCtrlList.removeAt(i);
       _extraValorCtrlList.removeAt(i);
+      _extraQtdCtrlList.removeAt(i);
+      _extraEstoqueSelecionadoIdList.removeAt(i);
       _update();
     });
   }
@@ -265,18 +432,23 @@ class _CalculatorScreenState extends State<CalculatorScreen>
                             ..._corPesoCtrlList,
                             ..._corCustoKgCtrlList,
                             ..._extraNomeCtrlList,
-                            ..._extraValorCtrlList
+                            ..._extraValorCtrlList,
+                            ..._extraQtdCtrlList,
                           ]) c.dispose();
                           _corNomeCtrlList.clear();
                           _corPesoCtrlList.clear();
                           _corCustoKgCtrlList.clear();
                           _corMaterialList.clear();
+                          _corCarretelSelecionadoIdList.clear();
                           _extraNomeCtrlList.clear();
                           _extraValorCtrlList.clear();
+                          _extraQtdCtrlList.clear();
+                          _extraEstoqueSelecionadoIdList.clear();
                           _model.multiCor = false;
                           _carretelSelecionadoId = null;
                           _model.margemPersonalizada = 50;
                           _margemCtrl.text = '50';
+                          _precoAlvoCtrl.clear();
                           _qtdLoteCtrl.text = '1';
                           _qtdLote = 1;
                           for (var p in _model.plataformas) {
@@ -323,6 +495,7 @@ class _CalculatorScreenState extends State<CalculatorScreen>
       _corPesoCtrlList.clear();
       _corCustoKgCtrlList.clear();
       _corMaterialList.clear();
+      _corCarretelSelecionadoIdList.clear();
       for (var cor in m.cores) {
         _corNomeCtrlList.add(TextEditingController(text: cor.nome));
         _corPesoCtrlList.add(TextEditingController(
@@ -330,16 +503,26 @@ class _CalculatorScreenState extends State<CalculatorScreen>
         _corCustoKgCtrlList
             .add(TextEditingController(text: _fmtP(cor.custoPorKg)));
         _corMaterialList.add(cor.material);
+        _corCarretelSelecionadoIdList.add(null);
       }
-      for (var c in [..._extraNomeCtrlList, ..._extraValorCtrlList])
-        c.dispose();
+      for (var c in [
+        ..._extraNomeCtrlList,
+        ..._extraValorCtrlList,
+        ..._extraQtdCtrlList
+      ]) c.dispose();
       _extraNomeCtrlList.clear();
       _extraValorCtrlList.clear();
+      _extraQtdCtrlList.clear();
+      _extraEstoqueSelecionadoIdList.clear();
       for (var e in m.materiaisExtras) {
         _extraNomeCtrlList.add(TextEditingController(text: e.nome));
         _extraValorCtrlList.add(
             TextEditingController(text: e.custo > 0 ? _fmtP(e.custo) : ''));
+        _extraQtdCtrlList
+            .add(TextEditingController(text: '${e.quantidadeUnidades}'));
+        _extraEstoqueSelecionadoIdList.add(e.idEstoqueMaterialExtra);
       }
+      _sincronizarPrecoAlvoComMargem();
       _update();
     });
   }
@@ -719,6 +902,7 @@ class _CalculatorScreenState extends State<CalculatorScreen>
                                   for (var pl in _model.plataformas)
                                     pl.ativa = false;
                                   p.ativa = v;
+                                  _atualizarMargemAPartirDoPrecoAlvo();
                                   _update();
                                 }))));
               }),
@@ -735,8 +919,20 @@ class _CalculatorScreenState extends State<CalculatorScreen>
             iconColor: const Color(0xFF10B981),
             child:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('Ex: argola de chaveiro, parafuso, imã...',
+              const Text('Selecione do estoque e informe unidades por peça.',
                   style: TextStyle(fontSize: 12, color: Colors.grey)),
+              const SizedBox(height: 6),
+              Row(children: [
+                const Expanded(
+                    child: Text(
+                        'Cadastre os itens na aba Estoque do Financeiro',
+                        style: TextStyle(fontSize: 11, color: Colors.grey))),
+                IconButton(
+                    tooltip: 'Atualizar materiais de estoque',
+                    onPressed: _carregarEstoqueMateriaisExtras,
+                    icon: const Icon(Icons.refresh_rounded,
+                        color: Color(0xFF10B981))),
+              ]),
               const SizedBox(height: 12),
               if (_extraNomeCtrlList.isEmpty)
                 Center(
@@ -747,28 +943,120 @@ class _CalculatorScreenState extends State<CalculatorScreen>
                   _extraNomeCtrlList.length,
                   (i) => Padding(
                       padding: const EdgeInsets.only(bottom: 10),
-                      child: Row(children: [
-                        Expanded(
-                            flex: 5,
-                            child: _miniTF(_extraNomeCtrlList[i],
-                                'Nome (ex: argola)', TextInputType.text,
-                                borderColor: const Color(0xFF10B981))),
-                        const SizedBox(width: 8),
-                        Expanded(
-                            flex: 3,
-                            child: _miniTF(_extraValorCtrlList[i], '0,00', null,
-                                suffix: 'R\$',
-                                borderColor: const Color(0xFF10B981))),
-                        const SizedBox(width: 4),
-                        IconButton(
-                            icon: const Icon(
-                                Icons.remove_circle_outline_rounded,
-                                color: Colors.red,
-                                size: 22),
-                            onPressed: () => _removeExtra(i),
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints()),
-                      ]))),
+                      child: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                            color: const Color(0xFF10B981).withOpacity(0.05),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                                color:
+                                    const Color(0xFF10B981).withOpacity(0.22))),
+                        child: Column(children: [
+                          Row(children: [
+                            Expanded(
+                              child: DropdownButtonFormField<String?>(
+                                value: i < _extraEstoqueSelecionadoIdList.length
+                                    ? _extraEstoqueSelecionadoIdList[i]
+                                    : null,
+                                decoration: InputDecoration(
+                                  labelText: 'Item do estoque (opcional)',
+                                  filled: true,
+                                  fillColor: Colors.grey.shade50,
+                                  border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                      borderSide: BorderSide(
+                                          color: Colors.grey.shade300)),
+                                  enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                      borderSide: BorderSide(
+                                          color: Colors.grey.shade300)),
+                                  focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                      borderSide: const BorderSide(
+                                          color: Color(0xFF10B981),
+                                          width: 1.8)),
+                                ),
+                                items: [
+                                  const DropdownMenuItem<String?>(
+                                    value: null,
+                                    child: Text('Não usar estoque neste item'),
+                                  ),
+                                  ..._estoqueMateriaisExtras
+                                      .map((e) => DropdownMenuItem<String?>(
+                                            value: e.id,
+                                            child: Text(
+                                                '${e.nome} · ${e.quantidadeRestante} un · R\$ ${e.valorUnitario.toStringAsFixed(2)}/un'),
+                                          )),
+                                ],
+                                onChanged: (id) =>
+                                    _aplicarMaterialExtraDoEstoque(i, id),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            IconButton(
+                                icon: const Icon(
+                                    Icons.remove_circle_outline_rounded,
+                                    color: Colors.red,
+                                    size: 22),
+                                onPressed: () => _removeExtra(i),
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints()),
+                          ]),
+                          const SizedBox(height: 8),
+                          Row(children: [
+                            Expanded(
+                                flex: 4,
+                                child: _miniTF(_extraNomeCtrlList[i],
+                                    'Nome (ex: argola)', TextInputType.text,
+                                    borderColor: const Color(0xFF10B981))),
+                            const SizedBox(width: 8),
+                            Expanded(
+                                flex: 2,
+                                child: TextField(
+                                    controller: _extraQtdCtrlList[i],
+                                    keyboardType: TextInputType.number,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly
+                                    ],
+                                    onChanged: (_) {
+                                      setState(() {
+                                        _recalcularCustoExtraDoEstoque(i);
+                                      });
+                                      _update();
+                                    },
+                                    decoration: InputDecoration(
+                                        labelText: 'Un/peça',
+                                        filled: true,
+                                        fillColor: Colors.white,
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                                horizontal: 12, vertical: 10),
+                                        border: OutlineInputBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(10),
+                                            borderSide: BorderSide(
+                                                color: Colors.grey.shade300)),
+                                        enabledBorder: OutlineInputBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(10),
+                                            borderSide: BorderSide(
+                                                color: Colors.grey.shade300)),
+                                        focusedBorder: OutlineInputBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(10),
+                                            borderSide: const BorderSide(
+                                                color: Color(0xFF10B981),
+                                                width: 1.8))))),
+                            const SizedBox(width: 8),
+                            Expanded(
+                                flex: 3,
+                                child: _miniTF(
+                                    _extraValorCtrlList[i], '0,00', null,
+                                    suffix: 'R\$',
+                                    borderColor: const Color(0xFF10B981))),
+                          ]),
+                        ]),
+                      ))),
               const SizedBox(height: 8),
               SizedBox(
                   width: double.infinity,
@@ -810,52 +1098,100 @@ class _CalculatorScreenState extends State<CalculatorScreen>
     );
   }
 
-  Widget _buildCorRow(int i) => Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-          color: const Color(0xFF8B5CF6).withOpacity(0.05),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFF8B5CF6).withOpacity(0.2))),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Text('Cor ${i + 1}',
-              style: const TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13,
-                  color: Color(0xFF8B5CF6))),
-          const Spacer(),
-          IconButton(
-              icon:
-                  const Icon(Icons.close_rounded, size: 18, color: Colors.red),
-              onPressed: () => _removeCor(i),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints()),
-        ]),
-        const SizedBox(height: 8),
-        _miniTF(
-            _corNomeCtrlList[i], 'Nome da cor (ex: Azul)', TextInputType.text,
-            borderColor: const Color(0xFF8B5CF6)),
-        const SizedBox(height: 8),
-        Row(children: [
-          Expanded(
-              child: _matDropdown(
-                  i < _corMaterialList.length ? _corMaterialList[i] : 'PLA',
-                  (v) => setState(() {
-                        if (i < _corMaterialList.length)
-                          _corMaterialList[i] = v!;
-                      }),
-                  accent: const Color(0xFF8B5CF6))),
-          const SizedBox(width: 8),
-          Expanded(
-              child: _miniTF(_corPesoCtrlList[i], 'Peso (g)', null,
-                  suffix: 'g', borderColor: const Color(0xFF8B5CF6))),
-          const SizedBox(width: 8),
-          Expanded(
-              child: _miniTF(_corCustoKgCtrlList[i], 'R\$/kg', null,
-                  borderColor: const Color(0xFF8B5CF6))),
-        ]),
-      ]));
+  Widget _buildCorRow(int i) {
+    final carreteisOrdenados = _carreteisOrdenadosParaCor(i);
+    return Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+            color: const Color(0xFF8B5CF6).withOpacity(0.05),
+            borderRadius: BorderRadius.circular(12),
+            border:
+                Border.all(color: const Color(0xFF8B5CF6).withOpacity(0.2))),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Text('Cor ${i + 1}',
+                style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                    color: Color(0xFF8B5CF6))),
+            const Spacer(),
+            IconButton(
+                icon: const Icon(Icons.close_rounded,
+                    size: 18, color: Colors.red),
+                onPressed: () => _removeCor(i),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints()),
+          ]),
+          const SizedBox(height: 8),
+          _miniTF(
+              _corNomeCtrlList[i], 'Nome da cor (ex: Azul)', TextInputType.text,
+              borderColor: const Color(0xFF8B5CF6)),
+          const SizedBox(height: 8),
+          Row(children: [
+            Expanded(
+              child: DropdownButtonFormField<String?>(
+                value: i < _corCarretelSelecionadoIdList.length
+                    ? _corCarretelSelecionadoIdList[i]
+                    : null,
+                decoration: InputDecoration(
+                  labelText: 'Usar carretel do estoque (opcional)',
+                  filled: true,
+                  fillColor: Colors.grey.shade50,
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: Colors.grey.shade300)),
+                  enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: Colors.grey.shade300)),
+                  focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(
+                          color: Color(0xFF8B5CF6), width: 1.8)),
+                ),
+                items: [
+                  const DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text('Não usar estoque nesta cor'),
+                  ),
+                  ...carreteisOrdenados.map((e) => DropdownMenuItem<String?>(
+                        value: e.id,
+                        child: Text(
+                            '${e.material}${e.cor.isNotEmpty ? " ${e.cor}" : ""} · ${e.pesoRestanteG.toStringAsFixed(0)}g · R\$ ${(e.custoPorG * 1000).toStringAsFixed(2)}/kg'),
+                      )),
+                ],
+                onChanged: (id) => _aplicarCarretelEstoqueNaCor(i, id),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Atualizar estoque',
+              onPressed: _carregarEstoqueFilamentos,
+              icon: const Icon(Icons.refresh_rounded, color: Color(0xFF8B5CF6)),
+            ),
+          ]),
+          const SizedBox(height: 8),
+          Row(children: [
+            Expanded(
+                child: _matDropdown(
+                    i < _corMaterialList.length ? _corMaterialList[i] : 'PLA',
+                    (v) => setState(() {
+                          if (i < _corMaterialList.length)
+                            _corMaterialList[i] = v!;
+                          if (i < _corCarretelSelecionadoIdList.length)
+                            _corCarretelSelecionadoIdList[i] = null;
+                        }),
+                    accent: const Color(0xFF8B5CF6))),
+            const SizedBox(width: 8),
+            Expanded(
+                child: _miniTF(_corPesoCtrlList[i], 'Peso (g)', null,
+                    suffix: 'g', borderColor: const Color(0xFF8B5CF6))),
+            const SizedBox(width: 8),
+            Expanded(
+                child: _miniTF(_corCustoKgCtrlList[i], 'R\$/kg', null,
+                    borderColor: const Color(0xFF8B5CF6))),
+          ]),
+        ]));
+  }
 
   // ══ ABA 2 ══════════════════════════════════════════════════════════════════
 
@@ -863,10 +1199,18 @@ class _CalculatorScreenState extends State<CalculatorScreen>
     final plat = _model.plataformas.firstWhere((p) => p.ativa,
         orElse: () => PlataformaConfig(nome: '', taxa: 0));
     final temPlat = plat.nome.isNotEmpty;
+    final revendaLocal = _plataformaEhRevendaLocal(plat);
 
     double precoPlat(double m) => temPlat
         ? _model.precoComPlataforma(m, plat.taxa, plat.taxaFixa)
         : _model.precoComMargemEIVA(m);
+    double precoLiquido(double m) => _model.precoComMargemEIVA(m);
+    String labelPrincipal() => temPlat
+        ? (revendaLocal ? 'Ele vende por' : 'Preço final ao cliente')
+        : 'Preço com IVA';
+    String labelSecundario() => temPlat
+        ? (revendaLocal ? 'Você vende para ele por' : 'Você recebe líquido')
+        : '';
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
@@ -957,18 +1301,26 @@ class _CalculatorScreenState extends State<CalculatorScreen>
                         label: 'Competitivo',
                         margem: '25%',
                         preco: precoPlat(25),
+                        precoSecundario: precoLiquido(25),
                         precoComIVA: precoPlat(25),
                         color: const Color(0xFF10B981),
-                        taxaIVA: temPlat ? 0 : _model.taxaIVA)),
+                        taxaIVA: temPlat ? 0 : _model.taxaIVA,
+                        valorPrincipalLabel: labelPrincipal(),
+                        valorSecundarioLabel:
+                            temPlat ? labelSecundario() : null)),
                 const SizedBox(width: 10),
                 Expanded(
                     child: PriceCard(
                         label: 'Padrão',
                         margem: '40%',
                         preco: precoPlat(40),
+                        precoSecundario: precoLiquido(40),
                         precoComIVA: precoPlat(40),
                         color: const Color(0xFF3B82F6),
-                        taxaIVA: temPlat ? 0 : _model.taxaIVA)),
+                        taxaIVA: temPlat ? 0 : _model.taxaIVA,
+                        valorPrincipalLabel: labelPrincipal(),
+                        valorSecundarioLabel:
+                            temPlat ? labelSecundario() : null)),
               ]),
               const SizedBox(height: 10),
               Row(children: [
@@ -977,30 +1329,46 @@ class _CalculatorScreenState extends State<CalculatorScreen>
                         label: 'Premium',
                         margem: '60%',
                         preco: precoPlat(60),
+                        precoSecundario: precoLiquido(60),
                         precoComIVA: precoPlat(60),
                         color: const Color(0xFFF59E0B),
-                        taxaIVA: temPlat ? 0 : _model.taxaIVA)),
+                        taxaIVA: temPlat ? 0 : _model.taxaIVA,
+                        valorPrincipalLabel: labelPrincipal(),
+                        valorSecundarioLabel:
+                            temPlat ? labelSecundario() : null)),
                 const SizedBox(width: 10),
                 Expanded(
                     child: PriceCard(
                         label: 'Luxo',
                         margem: '80%',
                         preco: precoPlat(80),
+                        precoSecundario: precoLiquido(80),
                         precoComIVA: precoPlat(80),
                         color: const Color(0xFF8B5CF6),
-                        taxaIVA: temPlat ? 0 : _model.taxaIVA)),
+                        taxaIVA: temPlat ? 0 : _model.taxaIVA,
+                        valorPrincipalLabel: labelPrincipal(),
+                        valorSecundarioLabel:
+                            temPlat ? labelSecundario() : null)),
               ]),
-              const SizedBox(height: 14), const Divider(),
+              const SizedBox(height: 14),
+              const Divider(),
               const SizedBox(height: 10),
-              // Margem personalizada
-              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                const Text('Margem personalizada',
-                    style:
-                        TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                SizedBox(
-                    width: 80,
-                    child: TextField(
-                        controller: _margemCtrl,
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                    color: const Color(0xFFF3EEFF),
+                    borderRadius: BorderRadius.circular(12)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Preco que quero vender',
+                        style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    const SizedBox(height: 6),
+                    SizedBox(
+                      width: 170,
+                      child: TextField(
+                        controller: _precoAlvoCtrl,
                         keyboardType: const TextInputType.numberWithOptions(
                             decimal: true),
                         inputFormatters: [
@@ -1009,89 +1377,51 @@ class _CalculatorScreenState extends State<CalculatorScreen>
                         ],
                         textAlign: TextAlign.center,
                         style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
                             color: Color(0xFF6C3CE1)),
                         decoration: InputDecoration(
-                            suffixText: '%',
-                            suffixStyle: const TextStyle(
-                                color: Color(0xFF6C3CE1),
-                                fontWeight: FontWeight.w600),
-                            filled: true,
-                            fillColor: const Color(0xFFF3EEFF),
-                            contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 8),
-                            border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                borderSide: BorderSide(
-                                    color: const Color(0xFF6C3CE1)
-                                        .withOpacity(0.3))),
-                            enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                borderSide: BorderSide(
-                                    color: const Color(0xFF6C3CE1)
-                                        .withOpacity(0.3))),
-                            focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                borderSide: const BorderSide(
-                                    color: Color(0xFF6C3CE1), width: 1.8))),
-                        onChanged: (v) {
-                          final p = double.tryParse(v);
-                          if (p != null && p >= 1 && p <= 99)
-                            setState(() {
-                              _model.margemPersonalizada = p;
-                              _margemCtrl.text = v;
-                            });
-                        })),
-              ]),
-              Slider(
-                  value: _model.margemPersonalizada.clamp(1.0, 95.0),
-                  min: 1,
-                  max: 95,
-                  divisions: 94,
-                  activeColor: const Color(0xFF6C3CE1),
-                  onChanged: (v) {
-                    setState(() {
-                      _model.margemPersonalizada = v;
-                      _margemCtrl.text = v.toStringAsFixed(0);
-                    });
-                  }),
-              Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                      color: const Color(0xFFF3EEFF),
-                      borderRadius: BorderRadius.circular(12)),
-                  child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(_fmt(precoPlat(_model.margemPersonalizada)),
-                                  style: const TextStyle(
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.w800,
-                                      color: Color(0xFF6C3CE1))),
-                              Text(temPlat ? 'Com ${plat.nome}' : 'Sem imposto',
-                                  style: const TextStyle(
-                                      fontSize: 12, color: Colors.grey)),
-                            ]),
-                        if (!temPlat && _model.taxaIVA > 0)
-                          Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text(_fmt(_model.precoPersonalizadoComIVA),
-                                    style: const TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w700,
-                                        color: Color(0xFF6C3CE1))),
-                                Text(
-                                    'Com ${_model.taxaIVA.toStringAsFixed(0)}% imposto',
-                                    style: const TextStyle(
-                                        fontSize: 11, color: Colors.grey)),
-                              ]),
-                      ])),
+                          prefixText: 'R\$ ',
+                          prefixStyle: const TextStyle(
+                              color: Color(0xFF6C3CE1),
+                              fontWeight: FontWeight.w700),
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 10),
+                          border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(
+                                  color: const Color(0xFF6C3CE1)
+                                      .withOpacity(0.3))),
+                          enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(
+                                  color: const Color(0xFF6C3CE1)
+                                      .withOpacity(0.3))),
+                          focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: const BorderSide(
+                                  color: Color(0xFF6C3CE1), width: 1.8)),
+                        ),
+                        onChanged: (_) => _atualizarMargemAPartirDoPrecoAlvo(),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text('Margem resultante: ${_margemCtrl.text}',
+                        style: const TextStyle(
+                            fontSize: 13,
+                            color: Color(0xFF6C3CE1),
+                            fontWeight: FontWeight.w800)),
+                    Text(
+                        temPlat
+                            ? 'Com ${plat.nome} · taxa ${plat.taxa.toStringAsFixed(1)}%${plat.taxaFixa > 0 ? ' + R\$ ${plat.taxaFixa.toStringAsFixed(2)}' : ''}'
+                            : 'Sem plataforma ativa',
+                        style:
+                            const TextStyle(fontSize: 12, color: Colors.grey)),
+                  ],
+                ),
+              ),
             ])),
         const SizedBox(height: 12),
 
@@ -1185,6 +1515,13 @@ class _CalculatorScreenState extends State<CalculatorScreen>
             child: CostBreakdown(model: _model)),
       ]),
     );
+  }
+
+  bool _plataformaEhRevendaLocal(PlataformaConfig plat) {
+    final nome = plat.nome.toLowerCase();
+    return nome.contains('revendedor') ||
+        nome.contains('local') ||
+        nome.contains('vendedor');
   }
 
   Widget _buildLoteGrid(PlataformaConfig plat, bool temPlat) {

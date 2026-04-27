@@ -41,10 +41,24 @@ List<PlataformaConfig> plataformasPadrao() => [
 class MaterialExtra {
   String nome;
   double custo;
-  MaterialExtra({this.nome = '', this.custo = 0.0});
-  Map<String, dynamic> toJson() => {'nome': nome, 'custo': custo};
+  String? idEstoqueMaterialExtra;
+  int quantidadeUnidades;
+  MaterialExtra(
+      {this.nome = '',
+      this.custo = 0.0,
+      this.idEstoqueMaterialExtra,
+      this.quantidadeUnidades = 1});
+  Map<String, dynamic> toJson() => {
+        'nome': nome,
+        'custo': custo,
+        'idEstoqueMaterialExtra': idEstoqueMaterialExtra,
+        'quantidadeUnidades': quantidadeUnidades,
+      };
   factory MaterialExtra.fromJson(Map<String, dynamic> j) => MaterialExtra(
-      nome: j['nome'] ?? '', custo: (j['custo'] ?? 0.0).toDouble());
+      nome: j['nome'] ?? '',
+      custo: (j['custo'] ?? 0.0).toDouble(),
+      idEstoqueMaterialExtra: j['idEstoqueMaterialExtra'],
+      quantidadeUnidades: ((j['quantidadeUnidades'] ?? 1) as num).toInt());
 }
 
 class CorFilamento {

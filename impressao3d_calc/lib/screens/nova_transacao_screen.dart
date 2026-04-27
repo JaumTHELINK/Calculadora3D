@@ -37,6 +37,7 @@ class _NovaTransacaoScreenState extends State<NovaTransacaoScreen> {
   HistoricoItem? _historicoVinculado;
   List<HistoricoItem> _historico = [];
   List<EstoqueFilamento> _estoque = [];
+  List<EstoqueMaterialExtra> _estoqueMateriaisExtras = [];
 
   @override
   void initState() {
@@ -82,6 +83,10 @@ class _NovaTransacaoScreenState extends State<NovaTransacaoScreen> {
       if (!mounted) return;
       setState(() => _estoque = e);
     });
+    FinanceiroService.carregarEstoqueMateriaisExtras().then((e) {
+      if (!mounted) return;
+      setState(() => _estoqueMateriaisExtras = e);
+    });
   }
 
   @override
@@ -113,10 +118,34 @@ class _NovaTransacaoScreenState extends State<NovaTransacaoScreen> {
     );
   }
 
+  Map<String, int> get _necessidadeMateriaisExtrasAtual {
+    if (!_isVendaDePeca ||
+        _historicoVinculado == null ||
+        _quantidadeAtual <= 0) {
+      return const {};
+    }
+    return FinanceiroService.calcularNecessidadeMateriaisExtras(
+      _historicoVinculado!,
+      _quantidadeAtual,
+    );
+  }
+
   double _disponivelMaterial(String material) {
     return _estoque
         .where((e) => e.material == material && !e.esgotado)
         .fold(0.0, (s, e) => s + e.pesoRestanteG);
+  }
+
+  int _disponivelMaterialExtra(String id) {
+    final idx = _estoqueMateriaisExtras.indexWhere((e) => e.id == id);
+    if (idx < 0) return 0;
+    return _estoqueMateriaisExtras[idx].quantidadeRestante;
+  }
+
+  String _nomeMaterialExtra(String id) {
+    final idx = _estoqueMateriaisExtras.indexWhere((e) => e.id == id);
+    if (idx < 0) return 'Material extra';
+    return _estoqueMateriaisExtras[idx].nome;
   }
 
   Future<void> _salvar() async {
@@ -150,12 +179,34 @@ class _NovaTransacaoScreenState extends State<NovaTransacaoScreen> {
       categoria: _categoriaSelecionada!,
       valor: valor,
       descricao: _descricaoCtrl.text.trim(),
-      idHistorico: _historicoVinculado?.id,
-      nomeHistorico: _historicoVinculado?.model.nomePeca,
-      quantidadePecas: vendaDePeca ? quantidade : null,
-      pesoFilamentoConsumidoG: vendaDePeca && _historicoVinculado != null
+      idHistorico: widget.edicao?.itensVenda.isNotEmpty == true
+        ? widget.edicao!.idHistorico
+        : _historicoVinculado?.id,
+      nomeHistorico: widget.edicao?.itensVenda.isNotEmpty == true
+        ? widget.edicao!.nomeHistorico
+        : _historicoVinculado?.model.nomePeca,
+      quantidadePecas: widget.edicao?.itensVenda.isNotEmpty == true
+        ? widget.edicao!.quantidadePecas
+        : (vendaDePeca ? quantidade : null),
+      pesoFilamentoConsumidoG: widget.edicao?.itensVenda.isNotEmpty == true
+        ? widget.edicao!.pesoFilamentoConsumidoG
+        : (vendaDePeca && _historicoVinculado != null
           ? _historicoVinculado!.model.pesoTotal * quantidade
-          : null,
+          : null),
+      itensVenda: widget.edicao?.itensVenda.isNotEmpty == true
+        ? widget.edicao!.itensVenda
+        : vendaDePeca
+          ? [
+              VendaPedidoItem(
+                idHistorico: _historicoVinculado?.id ?? '',
+                nomeHistorico:
+                    _historicoVinculado?.model.nomePeca.isNotEmpty == true
+                        ? _historicoVinculado!.model.nomePeca
+                        : 'Sem nome',
+                quantidade: quantidade,
+              )
+            ]
+          : const [],
     );
 
     final erro = await FinanceiroService.salvarTransacaoComRegraDeEstoque(
@@ -376,7 +427,7 @@ class _NovaTransacaoScreenState extends State<NovaTransacaoScreen> {
                           Align(
                             alignment: Alignment.centerLeft,
                             child: Text(
-                              'Consumo estimado: ${_necessidadeAtual.values.fold(0.0, (s, v) => s + v).toStringAsFixed(1)}g',
+                              'Consumo estimado: ${_necessidadeAtual.values.fold(0.0, (s, v) => s + v).toStringAsFixed(1)}g de filamento',
                               style: const TextStyle(
                                   fontSize: 12,
                                   color: Color(0xFF6C3CE1),
@@ -401,12 +452,13 @@ class _NovaTransacaoScreenState extends State<NovaTransacaoScreen> {
                                         fontWeight: FontWeight.w700,
                                         color: Color(0xFF334155))),
                                 const SizedBox(height: 6),
-                                if (_necessidadeAtual.isEmpty)
+                                if (_necessidadeAtual.isEmpty &&
+                                    _necessidadeMateriaisExtrasAtual.isEmpty)
                                   const Text(
                                       'Informe quantidade e selecione um projeto',
                                       style: TextStyle(
                                           fontSize: 12, color: Colors.grey))
-                                else
+                                else ...[
                                   ..._necessidadeAtual.entries.map((entry) {
                                     final disponivel =
                                         _disponivelMaterial(entry.key);
@@ -437,6 +489,48 @@ class _NovaTransacaoScreenState extends State<NovaTransacaoScreen> {
                                       ),
                                     );
                                   }),
+                                  if (_necessidadeMateriaisExtrasAtual
+                                      .isNotEmpty) ...[
+                                    const SizedBox(height: 6),
+                                    const Text('Materiais extras (unidades)',
+                                        style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xFF334155))),
+                                    const SizedBox(height: 4),
+                                    ..._necessidadeMateriaisExtrasAtual.entries
+                                        .map((entry) {
+                                      final disponivel =
+                                          _disponivelMaterialExtra(entry.key);
+                                      final ok = disponivel >= entry.value;
+                                      return Padding(
+                                        padding:
+                                            const EdgeInsets.only(bottom: 4),
+                                        child: Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                '${_nomeMaterialExtra(entry.key)}: precisa ${entry.value} un',
+                                                style: const TextStyle(
+                                                    fontSize: 12),
+                                              ),
+                                            ),
+                                            Text(
+                                              'tem $disponivel un',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w700,
+                                                color: ok
+                                                    ? const Color(0xFF059669)
+                                                    : const Color(0xFFDC2626),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    }),
+                                  ],
+                                ],
                               ],
                             ),
                           ),

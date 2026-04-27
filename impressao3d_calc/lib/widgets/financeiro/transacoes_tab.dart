@@ -72,11 +72,11 @@ class TransacoesTab extends StatelessWidget {
     if (!context.mounted) return;
 
     final messenger = ScaffoldMessenger.of(context);
-    messenger.hideCurrentSnackBar();
-    messenger.showSnackBar(
+    messenger.removeCurrentSnackBar();
+    final controller = messenger.showSnackBar(
       SnackBar(
         content: const Text('Transação excluída'),
-        duration: const Duration(seconds: 5),
+        duration: const Duration(seconds: 6),
         action: SnackBarAction(
           label: 'Desfazer',
           onPressed: () async {
@@ -91,6 +91,13 @@ class TransacoesTab extends StatelessWidget {
         ),
       ),
     );
+
+    // Garante que o aviso não fique preso na tela em cenários de acessibilidade.
+    Future.delayed(const Duration(seconds: 6), () {
+      if (context.mounted) {
+        controller.close();
+      }
+    });
   }
 
   @override
