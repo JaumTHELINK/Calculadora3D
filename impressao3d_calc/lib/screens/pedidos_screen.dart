@@ -65,7 +65,8 @@ class PedidosScreenState extends State<PedidosScreen> {
         text: edicao != null && edicao.valorPago > 0
             ? edicao.valorPago.toStringAsFixed(2)
             : '');
-    final observacoesCtrl = TextEditingController(text: edicao?.observacoes ?? '');
+    final observacoesCtrl =
+        TextEditingController(text: edicao?.observacoes ?? '');
 
     final linhas = <_LinhaPedidoForm>[];
     if (edicao != null && edicao.itens.isNotEmpty) {
@@ -109,10 +110,13 @@ class PedidosScreenState extends State<PedidosScreen> {
                 final nome = historico.model.nomePeca.isNotEmpty
                     ? historico.model.nomePeca
                     : 'Sem nome';
-                partes.add('$nome x${int.tryParse(linha.quantidadeCtrl.text) ?? 0}');
+                partes.add(
+                    '$nome x${int.tryParse(linha.quantidadeCtrl.text) ?? 0}');
               }
             }
-            return partes.isEmpty ? 'Nenhum item selecionado' : partes.join(' · ');
+            return partes.isEmpty
+                ? 'Nenhum item selecionado'
+                : partes.join(' · ');
           }
 
           double valorCobrado() =>
@@ -120,7 +124,8 @@ class PedidosScreenState extends State<PedidosScreen> {
 
           double valorPago() {
             if (pagoTotal) return valorCobrado();
-            return double.tryParse(valorPagoCtrl.text.replaceAll(',', '.')) ?? 0;
+            return double.tryParse(valorPagoCtrl.text.replaceAll(',', '.')) ??
+                0;
           }
 
           double valorFaltante() {
@@ -171,9 +176,10 @@ class PedidosScreenState extends State<PedidosScreen> {
                       children: [
                         ...List.generate(linhas.length, (index) {
                           final linha = linhas[index];
-                          final valorSelecionado = historicoIds.contains(linha.idHistorico)
-                              ? linha.idHistorico
-                              : null;
+                          final valorSelecionado =
+                              historicoIds.contains(linha.idHistorico)
+                                  ? linha.idHistorico
+                                  : null;
                           return Padding(
                             padding: EdgeInsets.only(
                                 bottom: index == linhas.length - 1 ? 0 : 10),
@@ -189,17 +195,21 @@ class PedidosScreenState extends State<PedidosScreen> {
                                       filled: true,
                                       fillColor: Colors.white,
                                       border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(10),
-                                          borderSide:
-                                              BorderSide(color: Colors.grey.shade300)),
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                          borderSide: BorderSide(
+                                              color: Colors.grey.shade300)),
                                       enabledBorder: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(10),
-                                          borderSide:
-                                              BorderSide(color: Colors.grey.shade300)),
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                          borderSide: BorderSide(
+                                              color: Colors.grey.shade300)),
                                       focusedBorder: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(10),
+                                          borderRadius:
+                                              BorderRadius.circular(10),
                                           borderSide: const BorderSide(
-                                              color: Color(0xFF6C3CE1), width: 1.8)),
+                                              color: Color(0xFF6C3CE1),
+                                              width: 1.8)),
                                     ),
                                     items: _historico
                                         .map((h) => DropdownMenuItem<String?>(
@@ -233,9 +243,10 @@ class PedidosScreenState extends State<PedidosScreen> {
                                       filled: true,
                                       fillColor: Colors.white,
                                       border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(10),
-                                          borderSide:
-                                              BorderSide(color: Colors.grey.shade300)),
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                          borderSide: BorderSide(
+                                              color: Colors.grey.shade300)),
                                     ),
                                     onChanged: (_) => setModalState(() {}),
                                   ),
@@ -247,7 +258,8 @@ class PedidosScreenState extends State<PedidosScreen> {
                                       final removida = linhas.removeAt(index);
                                       removida.dispose();
                                     }),
-                                    icon: const Icon(Icons.delete_outline_rounded),
+                                    icon: const Icon(
+                                        Icons.delete_outline_rounded),
                                     color: Colors.red.shade400,
                                   ),
                                 ],
@@ -259,7 +271,9 @@ class PedidosScreenState extends State<PedidosScreen> {
                         OutlinedButton.icon(
                           onPressed: () => setModalState(() {
                             linhas.add(_LinhaPedidoForm(
-                              id: DateTime.now().microsecondsSinceEpoch.toString(),
+                              id: DateTime.now()
+                                  .microsecondsSinceEpoch
+                                  .toString(),
                               quantidade: 1,
                             ));
                           }),
@@ -269,7 +283,8 @@ class PedidosScreenState extends State<PedidosScreen> {
                         const SizedBox(height: 8),
                         Text(
                           resumoItens(),
-                          style: const TextStyle(fontSize: 11, color: Colors.grey),
+                          style:
+                              const TextStyle(fontSize: 11, color: Colors.grey),
                         ),
                       ],
                     ),
@@ -281,14 +296,16 @@ class PedidosScreenState extends State<PedidosScreen> {
                           child: _field(
                               valorCobradoCtrl,
                               'Valor total cobrado',
-                              const TextInputType.numberWithOptions(decimal: true),
+                              const TextInputType.numberWithOptions(
+                                  decimal: true),
                               suffix: 'R\$')),
                       const SizedBox(width: 10),
                       Expanded(
                         child: _field(
                             valorPagoCtrl,
                             'Valor pago',
-                            const TextInputType.numberWithOptions(decimal: true),
+                            const TextInputType.numberWithOptions(
+                                decimal: true),
                             suffix: 'R\$'),
                       ),
                     ],
@@ -327,14 +344,20 @@ class PedidosScreenState extends State<PedidosScreen> {
                     child: FilledButton(
                       onPressed: () async {
                         final nome = nomeCtrl.text.trim();
-                        final valor = double.tryParse(valorCobradoCtrl.text.replaceAll(',', '.')) ?? 0;
+                        final valor = double.tryParse(
+                                valorCobradoCtrl.text.replaceAll(',', '.')) ??
+                            0;
                         final pago = pagoTotal
                             ? valor
-                            : double.tryParse(valorPagoCtrl.text.replaceAll(',', '.')) ?? 0;
+                            : double.tryParse(
+                                    valorPagoCtrl.text.replaceAll(',', '.')) ??
+                                0;
                         final itens = <PedidoLinhaItem>[];
                         for (final linha in linhas) {
-                          final quantidade = int.tryParse(linha.quantidadeCtrl.text) ?? 0;
-                          if (linha.idHistorico == null || linha.idHistorico!.isEmpty) continue;
+                          final quantidade =
+                              int.tryParse(linha.quantidadeCtrl.text) ?? 0;
+                          if (linha.idHistorico == null ||
+                              linha.idHistorico!.isEmpty) continue;
                           if (quantidade <= 0) continue;
                           final historico = _historico.firstWhere(
                             (h) => h.id == linha.idHistorico,
@@ -363,7 +386,8 @@ class PedidosScreenState extends State<PedidosScreen> {
                         if (itens.isEmpty) {
                           ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                  content: Text('Adicione ao menos um item válido')));
+                                  content: Text(
+                                      'Adicione ao menos um item válido')));
                           return;
                         }
                         if (valor <= 0) {
@@ -375,7 +399,8 @@ class PedidosScreenState extends State<PedidosScreen> {
                         if (pago < 0) {
                           ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                  content: Text('Informe um valor pago válido')));
+                                  content:
+                                      Text('Informe um valor pago válido')));
                           return;
                         }
 
@@ -465,7 +490,7 @@ class PedidosScreenState extends State<PedidosScreen> {
   Widget build(BuildContext context) {
     final total = _pedidos.fold(0.0, (s, p) => s + p.valorCobrado);
     final restante = _pedidos.fold(0.0, (s, p) => s + p.valorRestante);
-    
+
     final pedidosEmAberto = _pedidos.where((p) => !p.pagoTotal).toList();
     final pedidosPagos = _pedidos.where((p) => p.pagoTotal).toList();
 
@@ -506,7 +531,8 @@ class PedidosScreenState extends State<PedidosScreen> {
                               _stat('Pedidos', '${_pedidos.length}'),
                               _stat('Total cobrado',
                                   'R\$ ${total.toStringAsFixed(2)}'),
-                              _stat('A receber', 'R\$ ${restante.toStringAsFixed(2)}'),
+                              _stat('A receber',
+                                  'R\$ ${restante.toStringAsFixed(2)}'),
                             ],
                           ),
                         ),
@@ -609,31 +635,33 @@ class PedidosScreenState extends State<PedidosScreen> {
                   : 'Falta R\$ ${p.valorRestante.toStringAsFixed(2)}',
               style: TextStyle(
                 fontSize: 12,
-                color: p.pagoTotal ? const Color(0xFF059669) : const Color(0xFFEF4444),
+                color: p.pagoTotal
+                    ? const Color(0xFF059669)
+                    : const Color(0xFFEF4444),
                 fontWeight: FontWeight.w600,
               ),
             ),
-              const SizedBox(height: 6),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: () => _gerarOuAtualizarReceita(p),
-                  style: TextButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    foregroundColor: const Color(0xFF6C3CE1),
-                  ),
-                  icon: Icon(
-                    p.receitaGerada ? Icons.refresh_rounded : Icons.receipt_long,
-                    size: 18,
-                  ),
-                  label: Text(
-                    p.receitaGerada ? 'Atualizar receita' : 'Gerar receita',
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
+            const SizedBox(height: 6),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => _gerarOuAtualizarReceita(p),
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  foregroundColor: const Color(0xFF6C3CE1),
+                ),
+                icon: Icon(
+                  p.receitaGerada ? Icons.refresh_rounded : Icons.receipt_long,
+                  size: 18,
+                ),
+                label: Text(
+                  p.receitaGerada ? 'Atualizar receita' : 'Gerar receita',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
               ),
+            ),
           ],
         ),
         trailing: PopupMenuButton<String>(
