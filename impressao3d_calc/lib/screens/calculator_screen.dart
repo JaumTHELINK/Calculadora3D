@@ -254,6 +254,9 @@ class _CalculatorScreenState extends State<CalculatorScreen>
       if (id == null) return;
 
       final carretel = _estoqueFilamentos.firstWhere((e) => e.id == id);
+      if (i < _corNomeCtrlList.length) {
+        _corNomeCtrlList[i].text = carretel.cor;
+      }
       if (i < _corMaterialList.length) {
         _corMaterialList[i] = carretel.material;
       }

@@ -49,18 +49,27 @@ class PedidosService {
     await _persistir(lista);
   }
 
-  static Future<String?> gerarOuAtualizarReceita(PedidoItem pedido) async {
+  static Future<String?> registrarPagamentoPedido({
+    required PedidoItem pedido,
+    required double valorPago,
+    required bool pagoTotal,
+  }) async {
     final itensValidos = pedido.itens
-        .where((item) => item.idHistorico != null && item.idHistorico!.isNotEmpty && item.quantidade > 0)
+        .where((item) =>
+            item.idHistorico != null &&
+            item.idHistorico!.isNotEmpty &&
+            item.quantidade > 0)
         .toList();
     if (itensValidos.isEmpty) {
-      return 'Pedido sem itens válidos para gerar receita';
+      return 'Pedido sem itens válidos para registrar pagamento';
     }
 
-    final valorReceita =
-        pedido.pagoTotal || pedido.valorPago <= 0 ? pedido.valorCobrado : pedido.valorPago;
-    if (valorReceita <= 0) {
-      return 'Informe um valor cobrado válido';
+    final valorFinal = pagoTotal ? pedido.valorCobrado : valorPago;
+    if (valorFinal <= 0) {
+      return 'Informe um valor pago válido';
+    }
+    if (!pagoTotal && valorFinal > pedido.valorCobrado) {
+      return 'O valor pago não pode ser maior que o valor cobrado';
     }
 
     final transacaoId = pedido.idTransacaoReceita ?? 'receita_${pedido.id}';
@@ -77,8 +86,12 @@ class PedidosService {
       data: DateTime.now(),
       tipo: TipoTransacao.receita,
       categoria: 'Venda de peça',
-      valor: valorReceita,
-      descricao: _descricaoReceitaPedido(pedido),
+      valor: valorFinal,
+      descricao: _descricaoReceitaPedido(
+        pedido,
+        pagoTotal: pagoTotal,
+        valorPago: valorFinal,
+      ),
       idPedido: pedido.id,
       itensVenda: itensValidos
           .map((item) => VendaPedidoItem(
@@ -111,7 +124,7 @@ class PedidosService {
       nomeCliente: pedido.nomeCliente,
       itens: pedido.itens,
       valorCobrado: pedido.valorCobrado,
-      valorPago: pedido.valorPago,
+      valorPago: valorFinal,
       observacoes: pedido.observacoes,
       idTransacaoReceita: transacaoId,
     );
@@ -119,15 +132,28 @@ class PedidosService {
     return null;
   }
 
-  static String _descricaoReceitaPedido(PedidoItem pedido) {
+  static Future<String?> gerarOuAtualizarReceita(PedidoItem pedido) async {
+    return registrarPagamentoPedido(
+      pedido: pedido,
+      valorPago: pedido.pagoTotal || pedido.valorPago <= 0
+          ? pedido.valorCobrado
+          : pedido.valorPago,
+      pagoTotal: pedido.pagoTotal,
+    );
+  }
+
+  static String _descricaoReceitaPedido(PedidoItem pedido,
+      {required bool pagoTotal, required double valorPago}) {
     final itens = pedido.itens
         .where((item) => item.nomeItemSalvo.trim().isNotEmpty)
         .map((item) => '${item.nomeItemSalvo} x${item.quantidade}')
         .toList();
-    final base = itens.isEmpty ? 'Pedido de ${pedido.nomeCliente}' : itens.join(' · ');
+    final base = itens.isEmpty
+        ? 'Pedido de ${pedido.nomeCliente}'
+        : itens.join(' · ');
     final restante = pedido.valorRestante;
-    if (restante <= 0) return base;
-    return '$base · falta R\$ ${restante.toStringAsFixed(2)}';
+    if (pagoTotal || restante <= 0) return '$base · pago total';
+    return '$base · pago R\$ ${valorPago.toStringAsFixed(2)} · falta R\$ ${restante.toStringAsFixed(2)}';
   }
 
   static Future<void> _persistir(List<PedidoItem> itens) async {

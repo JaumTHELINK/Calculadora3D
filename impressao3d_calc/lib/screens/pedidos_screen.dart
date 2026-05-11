@@ -470,13 +470,109 @@ class PedidosScreenState extends State<PedidosScreen> {
     }
   }
 
-  Future<void> _gerarOuAtualizarReceita(PedidoItem pedido) async {
-    final erro = await PedidosService.gerarOuAtualizarReceita(pedido);
+  Future<double?> _pedirValorParcela(PedidoItem pedido) async {
+    final valorCtrl = TextEditingController();
+    final valor = await showDialog<double?>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Parcelar pedido'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Valor restante: R\$ ${pedido.valorRestante.toStringAsFixed(2)}',
+              style: TextStyle(color: Colors.grey.shade700),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: valorCtrl,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'^\d*[,.]?\d*')),
+              ],
+              decoration: const InputDecoration(
+                labelText: 'Valor recebido agora',
+                prefixText: 'R\$ ',
+              ),
+              autofocus: true,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, null),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final valor = double.tryParse(
+                      valorCtrl.text.replaceAll(',', '.').trim()) ??
+                  0;
+              if (valor <= 0) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Informe um valor válido')),
+                );
+                return;
+              }
+              if (valor > pedido.valorRestante) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                      content:
+                          Text('O valor da parcela não pode ser maior que o restante')),
+                );
+                return;
+              }
+              Navigator.pop(ctx, valor);
+            },
+            child: const Text('Confirmar'),
+          ),
+        ],
+      ),
+    );
+    valorCtrl.dispose();
+    return valor;
+  }
+
+  Future<void> _parcelar(PedidoItem pedido) async {
+    final valorRecebido = await _pedirValorParcela(pedido);
+    if (valorRecebido == null) return;
+
+    final novoTotalPago = pedido.valorPago + valorRecebido;
+    final pagoTotal = novoTotalPago >= pedido.valorCobrado - 0.0001;
+    final erro = await PedidosService.registrarPagamentoPedido(
+      pedido: pedido,
+      valorPago: pagoTotal ? pedido.valorCobrado : novoTotalPago,
+      pagoTotal: pagoTotal,
+    );
+
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          erro ?? 'Receita do pedido gerada com sucesso',
+          erro ?? 'Parcela registrada com sucesso',
+        ),
+        backgroundColor: erro == null ? const Color(0xFF059669) : Colors.red,
+      ),
+    );
+    if (erro == null) {
+      await _carregar();
+    }
+  }
+
+  Future<void> _marcarComoPago(PedidoItem pedido) async {
+    final erro = await PedidosService.registrarPagamentoPedido(
+      pedido: pedido,
+      valorPago: pedido.valorCobrado,
+      pagoTotal: true,
+    );
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          erro ?? 'Pedido marcado como pago',
         ),
         backgroundColor: erro == null ? const Color(0xFF059669) : Colors.red,
       ),
@@ -632,7 +728,9 @@ class PedidosScreenState extends State<PedidosScreen> {
             Text(
               p.pagoTotal
                   ? 'Pago total'
-                  : 'Falta R\$ ${p.valorRestante.toStringAsFixed(2)}',
+                  : p.valorPago > 0
+                      ? 'Parcial: R\$ ${p.valorPago.toStringAsFixed(2)} · Falta R\$ ${p.valorRestante.toStringAsFixed(2)}'
+                      : 'Falta R\$ ${p.valorRestante.toStringAsFixed(2)}',
               style: TextStyle(
                 fontSize: 12,
                 color: p.pagoTotal
@@ -641,27 +739,38 @@ class PedidosScreenState extends State<PedidosScreen> {
                 fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(height: 6),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: () => _gerarOuAtualizarReceita(p),
-                style: TextButton.styleFrom(
-                  visualDensity: VisualDensity.compact,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  foregroundColor: const Color(0xFF6C3CE1),
-                ),
-                icon: Icon(
-                  p.receitaGerada ? Icons.refresh_rounded : Icons.receipt_long,
-                  size: 18,
-                ),
-                label: Text(
-                  p.receitaGerada ? 'Atualizar receita' : 'Gerar receita',
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
+            if (!p.pagoTotal) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _parcelar(p),
+                      style: OutlinedButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        foregroundColor: const Color(0xFF6C3CE1),
+                        side: const BorderSide(color: Color(0xFF6C3CE1)),
+                      ),
+                      icon: const Icon(Icons.payments_outlined, size: 18),
+                      label: const Text('Parcelar'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () => _marcarComoPago(p),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF059669),
+                        foregroundColor: Colors.white,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      icon: const Icon(Icons.check_circle_outline, size: 18),
+                      label: const Text('Pago'),
+                    ),
+                  ),
+                ],
               ),
-            ),
+            ],
           ],
         ),
         trailing: PopupMenuButton<String>(
