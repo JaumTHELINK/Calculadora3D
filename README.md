@@ -1,65 +1,72 @@
-# 🖨️ Calculadora de Custos de Impressão 3D
+# Calculadora de Custos de Impressão 3D
 
-Aplicativo Flutter para calcular custos e preços de peças impressas em 3D.
+Aplicativo mobile Android para precificação de peças impressas em 3D e controle financeiro do negócio. Desenvolvido com **Flutter/Dart**.
 
-## ✨ Funcionalidades
+---
 
-- **Detalhes da peça**: Nome, material (PLA, PETG, ABS, TPU etc.), custo por kg e peso
-- **Tempo de impressão**: Horas + minutos de impressão + tempo de mão de obra
-- **Energia elétrica**: Potência da impressora × tarifa (R$/kWh)
-- **Custos adicionais**: Hardware e embalagem
-- **Configurações avançadas**: Depreciação de máquina e imposto/IVA
-- **Preços sugeridos**: Competitivo (25%), Padrão (40%), Premium (60%), Luxo (80%) e margem personalizada
-- **Discriminação de custos**: Gráfico visual de alocação de custos
-- Suporte a **preços com e sem impostos**
+## Funcionalidades
 
-## 🚀 Como usar
+### Calculadora de Custos
+- Cálculo por material (PLA, PETG, ABS, TPU, ASA, Nylon, Resina e mais)
+- Suporte a **multi-cor e multi-material** com pesos e custos individuais por filamento
+- Tempo de impressão em horas decimais (ex: 3.8h)
+- Custo de energia elétrica baseado na potência da impressora e tarifa kWh
+- Mão de obra com valor por hora configurável
+- Hardware, embalagem e materiais extras (argolas, parafusos, imãs etc.)
+- Depreciação da impressora e impostos/IVA
 
-### Pré-requisitos
+### Precificação
+- 4 faixas de preço sugerido: **Competitivo (25%)**, **Padrão (40%)**, **Premium (60%)** e **Luxo (80%)**
+- Margem personalizada com slider e campo editável
+- Integração com taxas das plataformas: **Shopee (20% + R$ 4,00/peça)**, **Mercado Livre (17%)**, **TikTok Shop (9%)** e **Revendedor (30%)**
+- Simulador de **produção em lote** com custo total, receita e lucro por quantidade
 
-- Flutter SDK 3.10+ instalado
-- Android Studio ou VS Code com extensão Flutter
-- Dispositivo Android ou emulador
+### Histórico
+- Salva cálculos realizados com data e hora
+- Possibilidade de recarregar um cálculo salvo na calculadora
+- Exclusão individual ou completa do histórico
 
-### Instalação
+### Módulo Financeiro
+- Registro de **receitas** e **despesas** por categoria
+- Vinculação de vendas ao histórico de cálculos
+- Filtro por mês com navegação entre períodos
+- Gráfico de barras de receitas vs despesas dos últimos 6 meses
+- Resumo de despesas por categoria com barra proporcional
+- Cálculo de **ROI da impressora**
+
+### Estoque de Filamentos
+- Cadastro de carretéis com marca, material, cor, peso e custo
+- Barra visual de consumo por carretel
+- Registro de uso por peça produzida com vínculo ao histórico
+- Histórico de consumo por carretel com opção de desfazer
+
+### Configurações
+- Valores fixos salvos automaticamente (material padrão, custo/kg, potência, tarifa, valor/hora, embalagem, imposto)
+- Taxas das plataformas de venda editáveis
+- Backup automático no **Google Drive**
+
+---
+
+## Tecnologias utilizadas
+
+- [Flutter](https://flutter.dev) / Dart
+- [shared_preferences](https://pub.dev/packages/shared_preferences) — armazenamento local
+- [fl_chart](https://pub.dev/packages/fl_chart) — gráficos
+- [google_sign_in](https://pub.dev/packages/google_sign_in) — autenticação Google
+- [googleapis](https://pub.dev/packages/googleapis) — integração com Google Drive
+
+---
+
+## Como rodar
 
 ```bash
-# 1. Extraia os arquivos do projeto
-# 2. Entre na pasta do projeto
-cd impressao3d_calc
-
-# 3. Instale as dependências
 flutter pub get
-
-# 4. Execute no dispositivo/emulador
 flutter run
+```
 
-# 5. Para gerar o APK
+Para gerar o APK:
+```bash
 flutter build apk --release
 ```
 
-O APK gerado estará em: `build/app/outputs/flutter-apk/app-release.apk`
-
-## 📁 Estrutura do projeto
-
-```
-lib/
-├── main.dart                    # Ponto de entrada
-├── models/
-│   └── calculator_model.dart    # Lógica de cálculos
-├── screens/
-│   └── calculator_screen.dart   # Tela principal
-└── widgets/
-    ├── section_card.dart        # Card de seção
-    ├── input_field.dart         # Campo de entrada
-    ├── price_card.dart          # Card de preço sugerido
-    └── cost_breakdown.dart      # Discriminação de custos
-```
-
-## 🧮 Fórmulas usadas
-
-- **Custo de material** = (peso em g / 1000) × custo por kg
-- **Custo de energia** = (potência em W / 1000) × horas de impressão × tarifa kWh
-- **Custo de mão de obra** = (minutos / 60) × valor da hora
-- **Preço com margem** = custo total ÷ (1 - margem%)
-- **Preço com imposto** = preço com margem × (1 + imposto%)
+---
