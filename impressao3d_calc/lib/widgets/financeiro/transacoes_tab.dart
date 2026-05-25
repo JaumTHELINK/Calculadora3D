@@ -5,6 +5,12 @@ import '../../services/financeiro_service.dart';
 import '../../services/historico_service.dart';
 import '../../screens/nova_transacao_screen.dart';
 
+/// Aba de listagem de transações.
+///
+/// Exibe transações agrupadas por dia, fornece swipe-to-delete com undo e
+/// permite editar lançamentos existentes. Opera via `FinanceiroService` para
+/// remoção e recriação segura de vendas de peça (aplicando regras de estoque
+/// quando necessário).
 class TransacoesTab extends StatelessWidget {
   final List<Transacao> transacoes;
   final VoidCallback onRefresh;

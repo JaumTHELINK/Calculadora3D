@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
 import '../models/calculator_model.dart';
 import '../services/historico_service.dart';
+import 'pedidos_screen.dart';
 
+/// Tela que lista cálculos salvos (histórico).
+///
+/// Permite buscar, filtrar por material/categoria, gerenciar categorias e
+/// carregar um cálculo de volta para a calculadora. Também expõe uma ação
+/// para criar um pedido a partir de um projeto salvo.
 class HistoricoScreen extends StatefulWidget {
   final Function(CalculatorModel)? onCarregarCalculo;
   const HistoricoScreen({super.key, this.onCarregarCalculo});
@@ -11,9 +17,11 @@ class HistoricoScreen extends StatefulWidget {
 
 class _HistoricoScreenState extends State<HistoricoScreen> {
   List<HistoricoItem> _itens = [];
+  List<String> _categorias = [];
   bool _loading = true;
   final TextEditingController _buscaCtrl = TextEditingController();
   String _filtroMaterial = 'Todos';
+  String _filtroCategoria = 'Todas';
 
   @override
   void initState() {
@@ -30,11 +38,160 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
   Future<void> _carregar() async {
     setState(() => _loading = true);
     final lista = await HistoricoService.carregar();
+    final categorias = await HistoricoService.carregarCategorias();
     setState(() {
       _itens = lista;
+      _categorias = categorias;
       _loading = false;
     });
   }
+
+  /// Recarrega lista de projetos e categorias do serviço de histórico.
+  /// Chamado em initState e após operações que alteram o armazenamento.
+
+  Future<String?> _inputTexto({
+    required String titulo,
+    String valorInicial = '',
+  }) async {
+    final ctrl = TextEditingController(text: valorInicial);
+    final resultado = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(titulo),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: 'Digite um nome'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final texto = ctrl.text.trim();
+              Navigator.pop(ctx, texto.isEmpty ? null : texto);
+            },
+            child: const Text('Salvar'),
+          ),
+        ],
+      ),
+    );
+    ctrl.dispose();
+    return resultado;
+  }
+
+  Future<void> _gerenciarCategorias() async {
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          Future<void> atualizar() async {
+            final categorias = await HistoricoService.carregarCategorias();
+            setDialogState(() {
+              _categorias = categorias;
+            });
+            await _carregar();
+          }
+
+          return AlertDialog(
+            title: const Text('Categorias dos projetos'),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: () async {
+                        final nova =
+                            await _inputTexto(titulo: 'Nova categoria');
+                        if (nova == null) return;
+                        await HistoricoService.salvarCategoria(nova);
+                        await atualizar();
+                      },
+                      icon: const Icon(Icons.add_rounded),
+                      label: const Text('Adicionar'),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Flexible(
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: _categorias.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (ctx, index) {
+                        final categoria = _categorias[index];
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(categoria),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                tooltip: 'Renomear',
+                                icon: const Icon(Icons.edit_outlined),
+                                onPressed: () async {
+                                  final novo = await _inputTexto(
+                                    titulo: 'Renomear categoria',
+                                    valorInicial: categoria,
+                                  );
+                                  if (novo == null) return;
+                                  await HistoricoService.renomearCategoria(
+                                      categoria, novo);
+                                  await atualizar();
+                                },
+                              ),
+                              IconButton(
+                                tooltip: 'Remover',
+                                icon: const Icon(Icons.delete_outline_rounded,
+                                    color: Colors.red),
+                                onPressed: categoria ==
+                                        HistoricoService.categoriaPadrao
+                                    ? null
+                                    : () async {
+                                        await HistoricoService.removerCategoria(
+                                            categoria);
+                                        await atualizar();
+                                      },
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Fechar'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  /// Abre um diálogo para gerenciar (adicionar/renomear/remover) categorias
+  /// usadas para agrupar os projetos salvos.
+
+  Future<void> _abrirPedido(HistoricoItem item) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PedidosScreen(historicoInicialId: item.id),
+      ),
+    );
+    await _carregar();
+  }
+
+  /// Navega para a tela de pedidos inicializando com o projeto selecionado.
 
   Future<void> _remover(HistoricoItem item) async {
     await HistoricoService.remover(item.id);
@@ -43,6 +200,8 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Cálculo removido'), duration: Duration(seconds: 2)));
   }
+
+  /// Remove um cálculo do histórico e mostra uma confirmação via Snackbar.
 
   Future<void> _limparTudo() async {
     final ok = await showDialog<bool>(
@@ -66,6 +225,8 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
     }
   }
 
+  /// Limpa todo o histórico (usuário confirmando a ação).
+
   @override
   Widget build(BuildContext context) {
     final itensFiltrados = _itens.where((item) {
@@ -74,7 +235,12 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
       final passouBusca = busca.isEmpty || nome.contains(busca);
       final passouMaterial = _filtroMaterial == 'Todos' ||
           item.model.materialSelecionado == _filtroMaterial;
-      return passouBusca && passouMaterial;
+      final categoria = item.categoria.trim().isEmpty
+          ? HistoricoService.categoriaPadrao
+          : item.categoria.trim();
+      final passouCategoria =
+          _filtroCategoria == 'Todas' || categoria == _filtroCategoria;
+      return passouBusca && passouMaterial && passouCategoria;
     }).toList();
 
     final materiais = <String>{
@@ -83,6 +249,28 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
           .where((m) => m.isNotEmpty)
     }.toList()
       ..sort();
+
+    final categoriasAtivas = <String>{
+      HistoricoService.categoriaPadrao,
+      ..._itens.map((e) => e.categoria.trim().isEmpty
+          ? HistoricoService.categoriaPadrao
+          : e.categoria.trim())
+    }.toList()
+      ..sort();
+
+    final itensPorCategoria = <String, List<HistoricoItem>>{};
+    for (final item in itensFiltrados) {
+      final categoria = item.categoria.trim().isEmpty
+          ? HistoricoService.categoriaPadrao
+          : item.categoria.trim();
+      itensPorCategoria.putIfAbsent(categoria, () => []).add(item);
+    }
+
+    final categoriasExibidas = _filtroCategoria == 'Todas'
+        ? categoriasAtivas
+            .where((c) => itensPorCategoria.containsKey(c))
+            .toList()
+        : [_filtroCategoria];
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F2FF),
@@ -95,6 +283,11 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
           Text('Histórico', style: TextStyle(fontWeight: FontWeight.w700))
         ]),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.category_outlined),
+            tooltip: 'Categorias',
+            onPressed: _gerenciarCategorias,
+          ),
           if (_itens.isNotEmpty)
             IconButton(
                 icon: const Icon(Icons.delete_sweep_rounded),
@@ -174,6 +367,41 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
                           ),
                         ),
                       ]),
+                      const SizedBox(height: 8),
+                      Row(children: [
+                        const Text('Categoria:',
+                            style: TextStyle(fontSize: 12, color: Colors.grey)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            value: _filtroCategoria,
+                            decoration: InputDecoration(
+                              filled: true,
+                              fillColor: Colors.white,
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 8),
+                              border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide:
+                                      BorderSide(color: Colors.grey.shade300)),
+                              enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide:
+                                      BorderSide(color: Colors.grey.shade300)),
+                            ),
+                            items: [
+                              const DropdownMenuItem(
+                                  value: 'Todas', child: Text('Todas')),
+                              ...categoriasAtivas.map((c) => DropdownMenuItem(
+                                  value: c,
+                                  child: Text(c,
+                                      overflow: TextOverflow.ellipsis))),
+                            ],
+                            onChanged: (v) =>
+                                setState(() => _filtroCategoria = v ?? 'Todas'),
+                          ),
+                        ),
+                      ]),
                     ]),
                   ),
                   Expanded(
@@ -183,11 +411,28 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
                                 'Nenhum projeto encontrado com esse filtro',
                                 style: TextStyle(color: Colors.grey)),
                           )
-                        : ListView.builder(
+                        : ListView(
                             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                            itemCount: itensFiltrados.length,
-                            itemBuilder: (ctx, i) =>
-                                _buildCard(itensFiltrados[i])),
+                            children: [
+                              for (final categoria in categoriasExibidas) ...[
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child: Text(
+                                    categoria,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF6C3CE1),
+                                    ),
+                                  ),
+                                ),
+                                ...?itensPorCategoria[categoria]
+                                    ?.map(_buildCard)
+                                    .toList(),
+                                const SizedBox(height: 8),
+                              ],
+                            ],
+                          ),
                   ),
                 ]),
     );
@@ -329,6 +574,12 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
                         _chip('Multi-cor', const Color(0xFF8B5CF6)),
                       ],
                     ]),
+                    const SizedBox(height: 8),
+                    _chip(
+                        item.categoria.trim().isEmpty
+                            ? HistoricoService.categoriaPadrao
+                            : item.categoria.trim(),
+                        const Color(0xFF059669)),
                     const SizedBox(height: 12),
                     Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -343,24 +594,47 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
                     const SizedBox(height: 10),
                     Align(
                       alignment: Alignment.centerRight,
-                      child: FilledButton.icon(
-                        onPressed: () {
-                          if (widget.onCarregarCalculo != null) {
-                            widget.onCarregarCalculo!(m);
-                            Navigator.pop(context);
-                          }
-                        },
-                        icon: const Icon(Icons.upload_file_rounded, size: 16),
-                        label: const Text('Carregar cálculo'),
-                        style: FilledButton.styleFrom(
-                            backgroundColor: const Color(0xFF6C3CE1),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 8),
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            visualDensity: VisualDensity.compact,
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10))),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: () => _abrirPedido(item),
+                            icon:
+                                const Icon(Icons.assignment_outlined, size: 16),
+                            label: const Text('Pedido'),
+                            style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF059669),
+                                side:
+                                    const BorderSide(color: Color(0xFF059669)),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 8),
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                visualDensity: VisualDensity.compact,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10))),
+                          ),
+                          const SizedBox(width: 8),
+                          FilledButton.icon(
+                            onPressed: () {
+                              if (widget.onCarregarCalculo != null) {
+                                widget.onCarregarCalculo!(m);
+                                Navigator.pop(context);
+                              }
+                            },
+                            icon:
+                                const Icon(Icons.upload_file_rounded, size: 16),
+                            label: const Text('Carregar cálculo'),
+                            style: FilledButton.styleFrom(
+                                backgroundColor: const Color(0xFF6C3CE1),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 8),
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                visualDensity: VisualDensity.compact,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10))),
+                          ),
+                        ],
                       ),
                     ),
                   ])),

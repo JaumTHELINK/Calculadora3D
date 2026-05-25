@@ -6,6 +6,11 @@ import '../services/financeiro_service.dart';
 import '../services/historico_service.dart';
 import '../widgets/section_card.dart';
 
+/// Tela para criar ou editar uma transação financeira.
+///
+/// Suporta receitas e despesas. Para vendas de peça, integra com o histórico
+/// para calcular consumo estimado de materiais e aplica regras de estoque
+/// ao salvar via `FinanceiroService.salvarTransacaoComRegraDeEstoque`.
 class NovaTransacaoScreen extends StatefulWidget {
   final TipoTransacao tipoInicial;
   final Transacao? edicao;
@@ -68,6 +73,7 @@ class _NovaTransacaoScreenState extends State<NovaTransacaoScreen> {
         _descricaoCtrl.text = widget.descricaoInicial!.trim();
       }
     }
+    // Carrega histórico salvo (projetos) para permitir vincular vendas.
     HistoricoService.carregar().then((h) => setState(() {
           _historico = h;
           final idInicial =
@@ -79,6 +85,7 @@ class _NovaTransacaoScreenState extends State<NovaTransacaoScreen> {
             } catch (_) {}
           }
         }));
+    // Carrega estado de estoque atual para exibir disponibilidade ao usuário.
     FinanceiroService.carregarEstoque().then((e) {
       if (!mounted) return;
       setState(() => _estoque = e);
@@ -97,6 +104,7 @@ class _NovaTransacaoScreenState extends State<NovaTransacaoScreen> {
     super.dispose();
   }
 
+  /// Retorna a lista de categorias apropriada ao tipo atual (receita/despesa).
   List<CategoriaFinanceira> get _categorias =>
       _tipo == TipoTransacao.receita ? categoriasReceita : categoriasDespesa;
 
@@ -148,6 +156,10 @@ class _NovaTransacaoScreenState extends State<NovaTransacaoScreen> {
     return _estoqueMateriaisExtras[idx].nome;
   }
 
+  /// Valida o formulário, constrói a `Transacao` e delega a persistência ao
+  /// `FinanceiroService`. Para vendas de peça, envia `historico` e `quantidade`
+  /// para que a regra de estoque seja aplicada (consumo de filamento e uso de
+  /// materiais extras).
   Future<void> _salvar() async {
     final valor = double.tryParse(_valorCtrl.text.replaceAll(',', '.'));
     if (valor == null || valor <= 0) {
@@ -180,33 +192,33 @@ class _NovaTransacaoScreenState extends State<NovaTransacaoScreen> {
       valor: valor,
       descricao: _descricaoCtrl.text.trim(),
       idHistorico: widget.edicao?.itensVenda.isNotEmpty == true
-        ? widget.edicao!.idHistorico
-        : _historicoVinculado?.id,
+          ? widget.edicao!.idHistorico
+          : _historicoVinculado?.id,
       nomeHistorico: widget.edicao?.itensVenda.isNotEmpty == true
-        ? widget.edicao!.nomeHistorico
-        : _historicoVinculado?.model.nomePeca,
+          ? widget.edicao!.nomeHistorico
+          : _historicoVinculado?.model.nomePeca,
       quantidadePecas: widget.edicao?.itensVenda.isNotEmpty == true
-        ? widget.edicao!.quantidadePecas
-        : (vendaDePeca ? quantidade : null),
+          ? widget.edicao!.quantidadePecas
+          : (vendaDePeca ? quantidade : null),
       pesoFilamentoConsumidoG: widget.edicao?.itensVenda.isNotEmpty == true
-        ? widget.edicao!.pesoFilamentoConsumidoG
-        : (vendaDePeca && _historicoVinculado != null
-          ? _historicoVinculado!.model.pesoTotal * quantidade
-          : null),
+          ? widget.edicao!.pesoFilamentoConsumidoG
+          : (vendaDePeca && _historicoVinculado != null
+              ? _historicoVinculado!.model.pesoTotal * quantidade
+              : null),
       itensVenda: widget.edicao?.itensVenda.isNotEmpty == true
-        ? widget.edicao!.itensVenda
-        : vendaDePeca
-          ? [
-              VendaPedidoItem(
-                idHistorico: _historicoVinculado?.id ?? '',
-                nomeHistorico:
-                    _historicoVinculado?.model.nomePeca.isNotEmpty == true
-                        ? _historicoVinculado!.model.nomePeca
-                        : 'Sem nome',
-                quantidade: quantidade,
-              )
-            ]
-          : const [],
+          ? widget.edicao!.itensVenda
+          : vendaDePeca
+              ? [
+                  VendaPedidoItem(
+                    idHistorico: _historicoVinculado?.id ?? '',
+                    nomeHistorico:
+                        _historicoVinculado?.model.nomePeca.isNotEmpty == true
+                            ? _historicoVinculado!.model.nomePeca
+                            : 'Sem nome',
+                    quantidade: quantidade,
+                  )
+                ]
+              : const [],
     );
 
     final erro = await FinanceiroService.salvarTransacaoComRegraDeEstoque(
@@ -222,6 +234,7 @@ class _NovaTransacaoScreenState extends State<NovaTransacaoScreen> {
     if (mounted) Navigator.pop(context);
   }
 
+  /// Exibe uma snackbar curta com a mensagem informada.
   void _snack(String msg) =>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
 

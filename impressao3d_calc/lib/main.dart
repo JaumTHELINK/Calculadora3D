@@ -12,6 +12,10 @@ void main() {
   runApp(const Impressao3DApp());
 }
 
+/// Widget raiz do aplicativo.
+///
+/// Configura tema, fontes e a rota inicial (`HomeShell`). Não contém lógica
+/// de negócio — apenas composição de alto nível da aplicação.
 class Impressao3DApp extends StatelessWidget {
   const Impressao3DApp({super.key});
 
@@ -31,6 +35,11 @@ class Impressao3DApp extends StatelessWidget {
   }
 }
 
+/// Shell da aplicação que contém a navegação principal por abas.
+///
+/// Mantém o estado da aba ativa, gerencia chaves para telas que precisam ser
+/// recarregadas (Financeiro, Pedidos) e escuta mudanças de lifecycle para
+/// executar backups automáticos quando o app vai para background.
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
 

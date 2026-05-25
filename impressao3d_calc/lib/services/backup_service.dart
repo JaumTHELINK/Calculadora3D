@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 // ─── HTTP client autenticado ──────────────────────────────────────────────────
 
+/// Cliente HTTP simples que injeta headers de autorização nas requisições.
 class _AuthClient extends http.BaseClient {
   final Map<String, String> _headers;
   final http.Client _client = http.Client();
@@ -21,6 +22,11 @@ class _AuthClient extends http.BaseClient {
 
 // ─── Serviço de backup ────────────────────────────────────────────────────────
 
+/// Serviço que sincroniza um backup JSON do `SharedPreferences` com o
+/// Google Drive (appDataFolder). Fornece login, logout, upload e download.
+///
+/// Observações: exige configuração do Google Sign-In no projeto e escopo
+/// `drive.appdata`.
 class BackupService {
   static const _fileName = 'calculadora3d_backup.json';
   static const _prefKey = 'backup_last_sync';
@@ -209,6 +215,7 @@ class BackupService {
 
 enum BackupStatus { success, error, notSignedIn, noFile }
 
+/// Resultado encapsulado das operações de backup/restauração.
 class BackupResult {
   final BackupStatus status;
   final DateTime? timestamp;

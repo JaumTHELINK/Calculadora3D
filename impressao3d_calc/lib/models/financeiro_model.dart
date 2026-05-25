@@ -1,5 +1,7 @@
+/// Tipo de transação financeira: receita ou despesa.
 enum TipoTransacao { receita, despesa }
 
+/// Meta-dados de categoria financeira exibida na UI (nome, emoji e tipo).
 class CategoriaFinanceira {
   final String nome, emoji;
   final TipoTransacao tipo;
@@ -38,30 +40,35 @@ const List<CategoriaFinanceira> categoriasDespesa = [
 List<CategoriaFinanceira> get todasCategorias =>
     [...categoriasReceita, ...categoriasDespesa];
 
+/// Item referente a uma venda dentro de um pedido, apontando para o
+/// histórico salvo (`idHistorico`) e a quantidade vendida.
 class VendaPedidoItem {
-    final String idHistorico;
-    final String nomeHistorico;
-    final int quantidade;
+  final String idHistorico;
+  final String nomeHistorico;
+  final int quantidade;
 
-    const VendaPedidoItem({
-        required this.idHistorico,
-        required this.nomeHistorico,
-        required this.quantidade,
-    });
+  const VendaPedidoItem({
+    required this.idHistorico,
+    required this.nomeHistorico,
+    required this.quantidade,
+  });
 
-    Map<String, dynamic> toJson() => {
-                'idHistorico': idHistorico,
-                'nomeHistorico': nomeHistorico,
-                'quantidade': quantidade,
-            };
+  Map<String, dynamic> toJson() => {
+        'idHistorico': idHistorico,
+        'nomeHistorico': nomeHistorico,
+        'quantidade': quantidade,
+      };
 
-    factory VendaPedidoItem.fromJson(Map<String, dynamic> j) => VendaPedidoItem(
-                idHistorico: j['idHistorico'] ?? '',
-                nomeHistorico: j['nomeHistorico'] ?? '',
-                quantidade: ((j['quantidade'] ?? 0) as num).toInt(),
-            );
+  factory VendaPedidoItem.fromJson(Map<String, dynamic> j) => VendaPedidoItem(
+        idHistorico: j['idHistorico'] ?? '',
+        nomeHistorico: j['nomeHistorico'] ?? '',
+        quantidade: ((j['quantidade'] ?? 0) as num).toInt(),
+      );
 }
 
+/// Representa uma transação financeira persistida: receita ou despesa.
+/// Pode referenciar um item de histórico ou um pedido, e conter dados de
+/// quantidade/peso quando for venda de peça.
 class Transacao {
   final String id, categoria, descricao;
   final DateTime data;
@@ -70,8 +77,8 @@ class Transacao {
   final String? idHistorico, nomeHistorico;
   final int? quantidadePecas;
   final double? pesoFilamentoConsumidoG;
-    final String? idPedido;
-    final List<VendaPedidoItem> itensVenda;
+  final String? idPedido;
+  final List<VendaPedidoItem> itensVenda;
 
   Transacao(
       {required this.id,
@@ -83,9 +90,9 @@ class Transacao {
       this.idHistorico,
       this.nomeHistorico,
       this.quantidadePecas,
-    this.pesoFilamentoConsumidoG,
-    this.idPedido,
-    this.itensVenda = const []});
+      this.pesoFilamentoConsumidoG,
+      this.idPedido,
+      this.itensVenda = const []});
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -97,9 +104,9 @@ class Transacao {
         'idHistorico': idHistorico,
         'nomeHistorico': nomeHistorico,
         'quantidadePecas': quantidadePecas,
-                'pesoFilamentoConsumidoG': pesoFilamentoConsumidoG,
-                'idPedido': idPedido,
-                'itensVenda': itensVenda.map((e) => e.toJson()).toList(),
+        'pesoFilamentoConsumidoG': pesoFilamentoConsumidoG,
+        'idPedido': idPedido,
+        'itensVenda': itensVenda.map((e) => e.toJson()).toList(),
       };
 
   factory Transacao.fromJson(Map<String, dynamic> j) => Transacao(
@@ -122,6 +129,7 @@ class Transacao {
           .toList());
 }
 
+/// Registro de um carretel/compra de filamento no estoque, com peso e custo.
 class EstoqueFilamento {
   final String id;
   final DateTime dataCompra;
@@ -167,6 +175,8 @@ class EstoqueFilamento {
       custoTotal: (j['custoTotal'] ?? 0.0).toDouble());
 }
 
+/// Registro de uso de filamento retirado do estoque (associado a histórico
+/// ou transação). Mantém `pesoUsadoG` e referência ao estoque original.
 class UsoFilamento {
   final String id, idEstoque, descricao;
   final DateTime data;
@@ -203,6 +213,7 @@ class UsoFilamento {
       idTransacao: j['idTransacao']);
 }
 
+/// Registro de um lote de material extra (parafusos, etiquetas, etc.) no estoque.
 class EstoqueMaterialExtra {
   final String id;
   final DateTime dataCadastro;
@@ -248,6 +259,7 @@ class EstoqueMaterialExtra {
       );
 }
 
+/// Registro de uso de material extra associado a uma operação (histórico/transação).
 class UsoMaterialExtra {
   final String id;
   final String idEstoqueMaterialExtra;

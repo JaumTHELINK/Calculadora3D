@@ -6,9 +6,16 @@ import '../models/financeiro_model.dart';
 import '../models/pedido_model.dart';
 import 'financeiro_service.dart';
 
+/// Serviço responsável por CRUD e operações relacionadas a pedidos de clientes.
+///
+/// - Persiste pedidos em `SharedPreferences` sob a chave `_key`.
+/// - Integra-se com `FinanceiroService` para registrar/remover transações
+///   associadas a pagamentos de pedidos.
 class PedidosService {
   static const _key = 'pedidos_clientes';
 
+  /// Carrega todos os pedidos salvos do armazenamento local.
+  /// Retorna lista vazia em caso de dados faltantes ou parse inválido.
   static Future<List<PedidoItem>> carregar() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_key);
@@ -23,6 +30,8 @@ class PedidosService {
     }
   }
 
+  /// Salva ou atualiza um `PedidoItem` na lista persistida.
+  /// Mantém ordenação por data (mais recente primeiro).
   static Future<void> salvar(PedidoItem item) async {
     final lista = await carregar();
     final idx = lista.indexWhere((x) => x.id == item.id);
@@ -34,6 +43,9 @@ class PedidosService {
     await _persistir(lista);
   }
 
+  /// Remove um pedido pelo `id`.
+  /// Se o pedido possuir `idTransacaoReceita`, remove também a transação
+  /// relacionada via `FinanceiroService` para manter consistência financeira.
   static Future<void> remover(String id) async {
     final lista = await carregar();
     PedidoItem? pedido;
@@ -49,6 +61,15 @@ class PedidosService {
     await _persistir(lista);
   }
 
+  /// Registra o pagamento (total ou parcial) de um pedido.
+  ///
+  /// - Valida itens do pedido e limites do valor informado.
+  /// - Cria ou atualiza uma transação do tipo `receita` em
+  ///   `FinanceiroService` usando `salvarTransacaoComRegraDeEstoque`.
+  /// - Atualiza o `PedidoItem` com `valorPago` e `idTransacaoReceita`.
+  ///
+  /// Retorna `null` em caso de sucesso ou uma string de erro descrevendo o
+  /// problema (mensagem amigável para exibir ao usuário).
   static Future<String?> registrarPagamentoPedido({
     required PedidoItem pedido,
     required double valorPago,
@@ -100,11 +121,13 @@ class PedidosService {
                 quantidade: item.quantidade,
               ))
           .toList(),
-        quantidadePecas:
-          itensValidos.map((item) => item.quantidade).fold<int>(0, (s, q) => s + q),
+      quantidadePecas: itensValidos
+          .map((item) => item.quantidade)
+          .fold<int>(0, (s, q) => s + q),
       nomeHistorico:
           itensValidos.isNotEmpty ? itensValidos.first.nomeItemSalvo : null,
-      idHistorico: itensValidos.isNotEmpty ? itensValidos.first.idHistorico : null,
+      idHistorico:
+          itensValidos.isNotEmpty ? itensValidos.first.idHistorico : null,
     );
 
     final erro = await FinanceiroService.salvarTransacaoComRegraDeEstoque(
@@ -132,6 +155,9 @@ class PedidosService {
     return null;
   }
 
+  /// Gera ou atualiza a receita associada a um pedido, decidindo o valor a
+  /// ser registrado com base no estado do pedido (`pagoTotal` ou `valorPago`).
+  /// Encapsula `registrarPagamentoPedido` para conveniência.
   static Future<String?> gerarOuAtualizarReceita(PedidoItem pedido) async {
     return registrarPagamentoPedido(
       pedido: pedido,
@@ -142,20 +168,23 @@ class PedidosService {
     );
   }
 
+  /// Constroi a descrição textual usada na transação de receita do pedido.
+  /// Inclui itens, marca se foi pago totalmente ou parcial e valores.
   static String _descricaoReceitaPedido(PedidoItem pedido,
       {required bool pagoTotal, required double valorPago}) {
     final itens = pedido.itens
         .where((item) => item.nomeItemSalvo.trim().isNotEmpty)
         .map((item) => '${item.nomeItemSalvo} x${item.quantidade}')
         .toList();
-    final base = itens.isEmpty
-        ? 'Pedido de ${pedido.nomeCliente}'
-        : itens.join(' · ');
+    final base =
+        itens.isEmpty ? 'Pedido de ${pedido.nomeCliente}' : itens.join(' · ');
     final restante = pedido.valorRestante;
     if (pagoTotal || restante <= 0) return '$base · pago total';
     return '$base · pago R\$ ${valorPago.toStringAsFixed(2)} · falta R\$ ${restante.toStringAsFixed(2)}';
   }
 
+  /// Persiste a lista de pedidos em `SharedPreferences`.
+  /// Serializa para JSON antes de salvar.
   static Future<void> _persistir(List<PedidoItem> itens) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(

@@ -5,6 +5,12 @@ import '../models/calculator_model.dart';
 import '../services/financeiro_service.dart';
 import '../services/historico_service.dart';
 
+/// Tela de gestão de estoque.
+///
+/// Pode ser exibida embutida (`embedded: true`) dentro de outras telas ou como
+/// tela completa. Mostra resumo, lista de carretéis e materiais extras e
+/// permite ações de adicionar, usar e remover itens. Interage com
+/// `FinanceiroService` para persistência e histórico de usos.
 class EstoqueScreen extends StatefulWidget {
   final bool embedded;
   const EstoqueScreen({super.key, required this.embedded});
@@ -23,6 +29,9 @@ class _EstoqueScreenState extends State<EstoqueScreen> {
     _carregar();
   }
 
+  /// Carrega dados do estoque (filamentos e materiais extras) em paralelo e
+  /// atualiza o estado local. Usado no refresh indicator e após operações que
+  /// alteram o estoque.
   Future<void> _carregar() async {
     setState(() => _loading = true);
     final dados = await Future.wait([
@@ -56,6 +65,8 @@ class _EstoqueScreenState extends State<EstoqueScreen> {
     );
   }
 
+  /// Constrói o corpo principal da tela: resumo, listas e botões conforme
+  /// o estado `embedded`.
   Widget _buildBody() {
     if (_loading) return const Center(child: CircularProgressIndicator());
     return RefreshIndicator(
@@ -150,6 +161,8 @@ class _EstoqueScreenState extends State<EstoqueScreen> {
                 side: const BorderSide(color: Color(0xFF059669)))),
       ]));
 
+  /// Calcula e monta o painel de resumo do estoque (carretéis ativos,
+  /// quantidade de filamento restante, extras restantes e total investido).
   Widget _buildResumo() {
     final ativos = _estoque.where((e) => !e.esgotado).toList();
     final extrasAtivos =

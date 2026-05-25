@@ -20,8 +20,16 @@ class _LinhaPedidoForm {
   void dispose() => quantidadeCtrl.dispose();
 }
 
+/// Tela de gerenciamento de pedidos de clientes.
+///
+/// Permite listar, criar, editar e remover pedidos. Integra com
+/// `PedidosService` para persistência e com `HistoricoService` para
+/// preencher itens a partir de projetos salvos. Exponibiliza `recarregarDados`
+/// como API pública para forçar recarga externa.
 class PedidosScreen extends StatefulWidget {
-  const PedidosScreen({super.key});
+  final String? historicoInicialId;
+
+  const PedidosScreen({super.key, this.historicoInicialId});
 
   @override
   State<PedidosScreen> createState() => PedidosScreenState();
@@ -31,6 +39,7 @@ class PedidosScreenState extends State<PedidosScreen> {
   List<PedidoItem> _pedidos = [];
   List<HistoricoItem> _historico = [];
   bool _loading = true;
+  bool _abriuPedidoInicial = false;
 
   Future<void> recarregarDados() => _carregar();
 
@@ -38,6 +47,8 @@ class PedidosScreenState extends State<PedidosScreen> {
   void initState() {
     super.initState();
     _carregar();
+
+    /// Inicializa a tela e dispara o carregamento inicial de pedidos e histórico.
   }
 
   Future<void> _carregar() async {
@@ -53,9 +64,86 @@ class PedidosScreenState extends State<PedidosScreen> {
       _historico = dados[1] as List<HistoricoItem>;
       _loading = false;
     });
+
+    if (widget.historicoInicialId != null && !_abriuPedidoInicial) {
+      final historicoInicial = _historico.firstWhere(
+        (h) => h.id == widget.historicoInicialId,
+        orElse: () => HistoricoItem(
+          id: '',
+          data: DateTime.now(),
+          model: CalculatorModel(),
+        ),
+      );
+      if (historicoInicial.id.isNotEmpty) {
+        _abriuPedidoInicial = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            _abrirFormulario(null, historicoInicial.id);
+          }
+        });
+      }
+    }
   }
 
-  Future<void> _abrirFormulario([PedidoItem? edicao]) async {
+  List<DropdownMenuItem<String?>> _itensHistoricoDropdown() {
+    final categorias = <String>{
+      HistoricoService.categoriaPadrao,
+      ..._historico.map((h) => h.categoria.trim().isEmpty
+          ? HistoricoService.categoriaPadrao
+          : h.categoria.trim())
+    }.toList()
+      ..sort();
+
+    /// Constrói os itens do Dropdown do histórico agrupando por categoria.
+    /// Retorna uma lista de [DropdownMenuItem] onde itens de categoria são
+    /// adicionados como entradas *disabled* seguidas dos projetos daquela
+    /// categoria. Usado no formulário de criação/edição de pedidos.
+    final itens = <DropdownMenuItem<String?>>[];
+    for (final categoria in categorias) {
+      final historicosDaCategoria = _historico
+          .where((h) =>
+              (h.categoria.trim().isEmpty
+                  ? HistoricoService.categoriaPadrao
+                  : h.categoria.trim()) ==
+              categoria)
+          .toList()
+        ..sort((a, b) => a.model.nomePeca.compareTo(b.model.nomePeca));
+
+      itens.add(
+        DropdownMenuItem<String?>(
+          value: '__cat__$categoria',
+          enabled: false,
+          child: Text(
+            categoria,
+            style: const TextStyle(
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF6C3CE1),
+            ),
+          ),
+        ),
+      );
+
+      itens.addAll(
+        historicosDaCategoria.map(
+          (h) => DropdownMenuItem<String?>(
+            value: h.id,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: Text(
+                h.model.nomePeca.isNotEmpty ? h.model.nomePeca : 'Sem nome',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return itens;
+  }
+
+  Future<void> _abrirFormulario(
+      [PedidoItem? edicao, String? historicoInicialId]) async {
     final nomeCtrl = TextEditingController(text: edicao?.nomeCliente ?? '');
     final valorCobradoCtrl = TextEditingController(
         text: edicao != null && edicao.valorCobrado > 0
@@ -68,6 +156,10 @@ class PedidosScreenState extends State<PedidosScreen> {
     final observacoesCtrl =
         TextEditingController(text: edicao?.observacoes ?? '');
 
+    /// Abre um dialogo/modal com o formulario para criar ou editar um pedido.
+    /// - Constrói controllers temporarios para cada campo.
+    /// - Valida os itens, valores e quantidade antes de salvar via [PedidosService].
+    /// - Se salvo, recarrega a lista de pedidos.
     final linhas = <_LinhaPedidoForm>[];
     if (edicao != null && edicao.itens.isNotEmpty) {
       for (final item in edicao.itens) {
@@ -80,6 +172,7 @@ class PedidosScreenState extends State<PedidosScreen> {
     } else {
       linhas.add(_LinhaPedidoForm(
         id: DateTime.now().microsecondsSinceEpoch.toString(),
+        idHistorico: historicoInicialId,
         quantidade: 1,
       ));
     }
@@ -211,18 +304,10 @@ class PedidosScreenState extends State<PedidosScreen> {
                                               color: Color(0xFF6C3CE1),
                                               width: 1.8)),
                                     ),
-                                    items: _historico
-                                        .map((h) => DropdownMenuItem<String?>(
-                                              value: h.id,
-                                              child: Text(
-                                                h.model.nomePeca.isNotEmpty
-                                                    ? h.model.nomePeca
-                                                    : 'Sem nome',
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            ))
-                                        .toList(),
+                                    items: _itensHistoricoDropdown(),
                                     onChanged: (v) {
+                                      if (v == null || v.startsWith('__cat__'))
+                                        return;
                                       setModalState(() {
                                         linha.idHistorico = v;
                                       });
@@ -468,6 +553,8 @@ class PedidosScreenState extends State<PedidosScreen> {
       await PedidosService.remover(p.id);
       await _carregar();
     }
+
+    /// Remove um pedido após confirmacao do usuario e recarrega a lista.
   }
 
   Future<double?> _pedirValorParcela(PedidoItem pedido) async {
@@ -507,9 +594,9 @@ class PedidosScreenState extends State<PedidosScreen> {
           ),
           FilledButton(
             onPressed: () {
-              final valor = double.tryParse(
-                      valorCtrl.text.replaceAll(',', '.').trim()) ??
-                  0;
+              final valor =
+                  double.tryParse(valorCtrl.text.replaceAll(',', '.').trim()) ??
+                      0;
               if (valor <= 0) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Informe um valor válido')),
@@ -519,8 +606,8 @@ class PedidosScreenState extends State<PedidosScreen> {
               if (valor > pedido.valorRestante) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                      content:
-                          Text('O valor da parcela não pode ser maior que o restante')),
+                      content: Text(
+                          'O valor da parcela não pode ser maior que o restante')),
                 );
                 return;
               }

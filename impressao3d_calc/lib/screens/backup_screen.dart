@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import '../services/backup_service.dart';
 
+/// Tela para gerenciar backups no Google Drive.
+///
+/// Exibe estado da conta Google conectada, permite efetuar `fazerBackup`
+/// e `restaurarBackup` via `BackupService` e mostra mensagens de status.
+/// Requer que o Google Sign-In esteja configurado no projeto.
 class BackupScreen extends StatefulWidget {
   const BackupScreen({super.key});
 
@@ -23,6 +28,7 @@ class _BackupScreenState extends State<BackupScreen> {
     _init();
   }
 
+  /// Inicializa o estado: tenta login silencioso e lê o timestamp do último backup.
   Future<void> _init() async {
     setState(() => _loading = true);
     await BackupService.signInSilently();
@@ -36,6 +42,8 @@ class _BackupScreenState extends State<BackupScreen> {
     });
   }
 
+  /// Inicia o fluxo de login interativo com Google.
+  /// Atualiza mensagens de status em caso de erro.
   Future<void> _signIn() async {
     setState(() => _loading = true);
     final ok = await BackupService.signIn();
@@ -54,6 +62,7 @@ class _BackupScreenState extends State<BackupScreen> {
     });
   }
 
+  /// Desconecta a conta Google localmente e limpa estado relacionado.
   Future<void> _signOut() async {
     await BackupService.signOut();
     setState(() {
@@ -65,6 +74,8 @@ class _BackupScreenState extends State<BackupScreen> {
     });
   }
 
+  /// Executa o upload do backup atual para o Google Drive.
+  /// Mostra mensagem de sucesso/erro retornada por `BackupService`.
   Future<void> _fazerBackup() async {
     setState(() {
       _loading = true;
@@ -84,6 +95,8 @@ class _BackupScreenState extends State<BackupScreen> {
     });
   }
 
+  /// Restaura dados do backup salvo no Drive para o `SharedPreferences` local.
+  /// Solicita confirmação do usuário antes de sobrescrever dados.
   Future<void> _restaurar() async {
     final confirm = await showDialog<bool>(
       context: context,

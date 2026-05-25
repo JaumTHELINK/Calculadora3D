@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import '../models/calculator_model.dart';
 
+/// Componente que exibe o detalhamento dos custos de produção.
+///
+/// Recebe um `CalculatorModel` e apresenta a alocação de custos por item
+/// (material, mão de obra, energia, etc.), além de detalhar materiais extras
+/// quando presentes e mostrar barras de alocação visualmente.
 class CostBreakdown extends StatelessWidget {
   final CalculatorModel model;
   const CostBreakdown({super.key, required this.model});

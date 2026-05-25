@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+/// Cartão de exibição de preço e margem.
+///
+/// Mostra valor principal, valor secundário (opcional), margem e preço com
+/// imposto. Usado na tela da calculadora para apresentar resultados ao usuário.
 class PriceCard extends StatelessWidget {
   final String label, margem;
   final String? valorPrincipalLabel;

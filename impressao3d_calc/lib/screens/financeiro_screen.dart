@@ -6,6 +6,12 @@ import 'estoque_screen.dart';
 import '../widgets/financeiro/resumo_tab.dart';
 import '../widgets/financeiro/transacoes_tab.dart';
 
+/// Tela principal da área financeira.
+///
+/// Exibe três abas: resumo mensal, lista de transações e gestão de estoque.
+/// Atua como orquestrador simples: carrega transações via [FinanceiroService],
+/// calcula resumo do mês selecionado e delega a renderização para widgets
+/// específicos (`ResumoTab`, `TransacoesTab`, `EstoqueScreen`).
 class FinanceiroScreen extends StatefulWidget {
   const FinanceiroScreen({super.key});
   @override
@@ -26,6 +32,10 @@ class FinanceiroScreenState extends State<FinanceiroScreen>
     _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() => setState(() {}));
     _mesSelecionado = DateTime(DateTime.now().year, DateTime.now().month);
+
+    /// Executa o carregamento inicial de transações e estoque.
+    /// Mantemos `_estoqueReloadToken` para forçar rebuild do `EstoqueScreen`
+    /// quando os dados do serviço mudarem.
     _carregar();
   }
 
@@ -35,6 +45,9 @@ class FinanceiroScreenState extends State<FinanceiroScreen>
     super.dispose();
   }
 
+  /// Carrega as transações do repositório ([FinanceiroService]) e atualiza
+  /// o estado local. Incrementa `_estoqueReloadToken` para sinalizar ao
+  /// `EstoqueScreen` que deve recriar seu estado embutido quando necessário.
   Future<void> _carregar() async {
     if (!mounted) return;
     setState(() => _loading = true);
@@ -47,8 +60,10 @@ class FinanceiroScreenState extends State<FinanceiroScreen>
     });
   }
 
+  /// API pública para forçar recarga dos dados financeiros.
   Future<void> recarregarDados() => _carregar();
 
+  /// Move o mês selecionado para frente/para trás em `delta` meses.
   void _mudarMes(int delta) => setState(() => _mesSelecionado =
       DateTime(_mesSelecionado.year, _mesSelecionado.month + delta));
 
@@ -138,6 +153,8 @@ class FinanceiroScreenState extends State<FinanceiroScreen>
     );
   }
 
+  /// Constrói o seletor de mês usado pela aba de `Resumo` e `Transações`.
+  /// Fornece controles para navegar entre meses e voltar ao mês atual.
   Widget _buildMesSeletor() {
     final meses = [
       'Jan',
@@ -187,6 +204,9 @@ class FinanceiroScreenState extends State<FinanceiroScreen>
         ]));
   }
 
+  /// Navega até a tela de criação de nova transação (`NovaTransacaoScreen`).
+  /// Após retorno (quando nova transação foi criada), recarrega os dados para
+  /// refletir a alteração no resumo e na lista de transações.
   Future<void> _abrirNovaTransacao(TipoTransacao tipo) async {
     await Navigator.push(
         context,

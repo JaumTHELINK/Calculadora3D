@@ -1,3 +1,5 @@
+/// Linha de um pedido que referencia um item salvo no histórico ou descreve
+/// um item manualmente (nome e quantidade).
 class PedidoLinhaItem {
   final String id;
   String? idHistorico;
@@ -26,6 +28,9 @@ class PedidoLinhaItem {
       );
 }
 
+/// Representa um pedido do cliente, contendo múltiplas linhas, valores e
+/// estado de pagamento. Pode gerar uma transação de receita ao registrar
+/// pagamento.
 class PedidoItem {
   final String id;
   final DateTime data;
@@ -59,7 +64,8 @@ class PedidoItem {
 
   bool get pagoTotal => valorRestante <= 0.0001;
 
-  bool get receitaGerada => idTransacaoReceita != null && idTransacaoReceita!.isNotEmpty;
+  bool get receitaGerada =>
+      idTransacaoReceita != null && idTransacaoReceita!.isNotEmpty;
 
   Map<String, dynamic> toJson() => {
         'id': id,

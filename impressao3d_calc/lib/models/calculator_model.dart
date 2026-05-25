@@ -1,3 +1,4 @@
+/// Lista de materiais suportados no cálculo (nomes legíveis).
 const List<String> materiais = [
   'PLA',
   'PETG',
@@ -10,6 +11,7 @@ const List<String> materiais = [
   'PVA',
 ];
 
+/// Configuração de uma plataforma de venda (taxa percentual e fixa).
 class PlataformaConfig {
   String nome;
   double taxa;
@@ -31,6 +33,7 @@ class PlataformaConfig {
       ativa: j['ativa'] ?? false);
 }
 
+/// Retorna uma lista de configurações padrão de plataformas de venda.
 List<PlataformaConfig> plataformasPadrao() => [
       PlataformaConfig(nome: 'Shopee', taxa: 20.0, taxaFixa: 4.0),
       PlataformaConfig(nome: 'Mercado Livre', taxa: 17.0),
@@ -38,6 +41,7 @@ List<PlataformaConfig> plataformasPadrao() => [
       PlataformaConfig(nome: 'Revendedor', taxa: 30.0),
     ];
 
+/// Representa um item de material extra usado na produção (ex: argola).
 class MaterialExtra {
   String nome;
   double custo;
@@ -61,6 +65,8 @@ class MaterialExtra {
       quantidadeUnidades: ((j['quantidadeUnidades'] ?? 1) as num).toInt());
 }
 
+/// Representa uma cor específica de filamento usada em projetos
+/// multicor: material, peso usado e custo por kg.
 class CorFilamento {
   String nome, material;
   double pesoGramas, custoPorKg;
@@ -83,6 +89,11 @@ class CorFilamento {
       custoPorKg: (j['custoPorKg'] ?? 110.0).toDouble());
 }
 
+/// Modelo principal de cálculo de custos para uma peça/projeto.
+///
+/// Agrega informações sobre material, tempo, mão de obra, energia,
+/// materiais extras e plataformas. Expõe getters para custo parcial e
+/// métodos para calcular preços com margens, IVA e taxas de plataforma.
 class CalculatorModel {
   String nomePeca = '';
   String materialSelecionado = 'PLA';
@@ -213,16 +224,32 @@ class CalculatorModel {
   }
 }
 
+/// Item de histórico que armazena um `CalculatorModel` salvo junto com
+/// metadados (id, data e categoria). Usado para reaplicar cálculos e como
+/// fonte para vendas de peça.
 class HistoricoItem {
   final String id;
   final DateTime data;
   final CalculatorModel model;
-  HistoricoItem({required this.id, required this.data, required this.model});
-  Map<String, dynamic> toJson() =>
-      {'id': id, 'data': data.toIso8601String(), 'model': model.toJson()};
+  String categoria;
+
+  HistoricoItem({
+    required this.id,
+    required this.data,
+    required this.model,
+    this.categoria = 'Sem categoria',
+  });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'data': data.toIso8601String(),
+        'model': model.toJson(),
+        'categoria': categoria,
+      };
   factory HistoricoItem.fromJson(Map<String, dynamic> j) => HistoricoItem(
       id: j['id'] ?? '',
       data: DateTime.tryParse(j['data'] ?? '') ?? DateTime.now(),
       model:
-          CalculatorModel.fromJson(j['model'] as Map<String, dynamic>? ?? {}));
+          CalculatorModel.fromJson(j['model'] as Map<String, dynamic>? ?? {}),
+      categoria: j['categoria'] ?? 'Sem categoria');
 }

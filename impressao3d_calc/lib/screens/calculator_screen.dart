@@ -15,6 +15,12 @@ import 'historico_screen.dart';
 import 'configuracoes_screen.dart';
 import 'nova_transacao_screen.dart';
 
+/// Tela principal da calculadora de custo e preço.
+///
+/// Permite configurar peças, materiais, múltiplas cores, materiais extras e
+/// calcular preços com diferentes margens, IVA e taxas de plataforma.
+/// Exporta ações que geram histórico e receitas rápidas integradas ao fluxo
+/// financeiro da aplicação.
 class CalculatorScreen extends StatefulWidget {
   const CalculatorScreen({super.key});
   @override
@@ -67,6 +73,9 @@ class _CalculatorScreenState extends State<CalculatorScreen>
     _carregarEstoqueMateriaisExtras();
   }
 
+  /// Inicializa controladores, carrega preferências e sincroniza estoque.
+  /// Chamado automaticamente no ciclo de vida do widget.
+
   @override
   void dispose() {
     _prefsDebounce?.cancel();
@@ -103,6 +112,9 @@ class _CalculatorScreenState extends State<CalculatorScreen>
     super.dispose();
   }
 
+  /// Libera recursos e timers usados pela tela ao desmontar.
+
+  /// Carrega as preferencias persistidas e sincroniza os campos da calculadora.
   Future<void> _carregarPreferencias() async {
     final p = await PreferenciasService.carregar();
     setState(() {
@@ -129,9 +141,13 @@ class _CalculatorScreenState extends State<CalculatorScreen>
     });
   }
 
+  /// Formata um valor numerico para exibir inteiro quando nao ha casas decimais.
+
+  /// Formata um valor numerico para exibir inteiro quando nao ha casas decimais.
   String _fmtP(double v) =>
       v == v.truncateToDouble() ? v.toInt().toString() : v.toString();
 
+  /// Persiste as preferencias de custo e configuracao financeira usadas pela calculadora.
   void _salvarPreferencias() {
     PreferenciasService.salvarMaterial(_model.materialSelecionado);
     if (_model.custoPorKg > 0)
@@ -147,12 +163,15 @@ class _CalculatorScreenState extends State<CalculatorScreen>
     PreferenciasService.salvarDepreciacao(_model.custoDepreciacao);
   }
 
+  /// Retorna a plataforma de venda que esta ativa no momento.
   PlataformaConfig _plataformaAtivaAtual() =>
       _model.plataformas.firstWhere((p) => p.ativa,
           orElse: () => PlataformaConfig(nome: '', taxa: 0));
 
+  /// Indica se existe alguma plataforma de venda ativa.
   bool _temPlataformaAtiva() => _plataformaAtivaAtual().nome.isNotEmpty;
 
+  /// Calcula o preco alvo atual levando em conta a plataforma ativa, se existir.
   double _precoAlvoAtual() {
     final plat = _plataformaAtivaAtual();
     return _temPlataformaAtiva()
@@ -161,6 +180,7 @@ class _CalculatorScreenState extends State<CalculatorScreen>
         : _model.precoPersonalizadoComIVA;
   }
 
+  /// Converte um preco alvo em margem estimada a partir do custo total sem margem.
   double? _margemAposPrecoAlvo(double precoAlvo) {
     if (precoAlvo <= 0 || _model.custoTotalSemMargem <= 0) return null;
 
@@ -176,12 +196,14 @@ class _CalculatorScreenState extends State<CalculatorScreen>
     return margem;
   }
 
+  /// Mantem o campo de preco alvo alinhado com a margem atual da calculadora.
   void _sincronizarPrecoAlvoComMargem() {
     final preco = _precoAlvoAtual();
     _precoAlvoCtrl.text = preco > 0 ? _fmtP(preco) : '';
     _atualizarMargemAPartirDoPrecoAlvo();
   }
 
+  /// Recalcula a margem personalizada a partir do valor digitado no preco alvo.
   void _atualizarMargemAPartirDoPrecoAlvo() {
     final preco = double.tryParse(_precoAlvoCtrl.text.replaceAll(',', '.'));
     final margem = preco == null ? null : _margemAposPrecoAlvo(preco);
@@ -196,12 +218,14 @@ class _CalculatorScreenState extends State<CalculatorScreen>
     });
   }
 
+  /// Agenda a gravacao das preferencias para evitar salvar a cada tecla.
   void _agendarSalvarPreferencias() {
     _prefsDebounce?.cancel();
     _prefsDebounce =
         Timer(const Duration(milliseconds: 700), _salvarPreferencias);
   }
 
+  /// Recarrega o estoque de filamentos e limpa selecoes que ficaram invalidas.
   Future<void> _carregarEstoqueFilamentos() async {
     final estoque = await FinanceiroService.carregarEstoque();
     if (!mounted) return;
@@ -221,6 +245,9 @@ class _CalculatorScreenState extends State<CalculatorScreen>
     });
   }
 
+  /// Recarrega o estoque de materiais extras e limpa selecoes invalidas.
+
+  /// Recarrega o estoque de materiais extras e limpa selecoes invalidas.
   Future<void> _carregarEstoqueMateriaisExtras() async {
     final estoque = await FinanceiroService.carregarEstoqueMateriaisExtras();
     if (!mounted) return;
@@ -236,7 +263,10 @@ class _CalculatorScreenState extends State<CalculatorScreen>
     });
   }
 
+  /// Aplica um carretel do estoque ao projeto principal monocor.
   void _aplicarCarretelEstoque(String? id) {
+    /// Aplica um carretel selecionado a uma linha cor em modo multicor,
+    /// atualizando nome/material/custo da linha conforme o estoque escolhido.
     setState(() {
       _carretelSelecionadoId = id;
       if (id == null) return;
@@ -247,6 +277,7 @@ class _CalculatorScreenState extends State<CalculatorScreen>
     _update();
   }
 
+  /// Aplica um carretel do estoque a uma linha de cor no modo multicor.
   void _aplicarCarretelEstoqueNaCor(int i, String? id) {
     setState(() {
       if (i >= _corCarretelSelecionadoIdList.length) return;
@@ -267,6 +298,7 @@ class _CalculatorScreenState extends State<CalculatorScreen>
     _update();
   }
 
+  /// Ordena os carretels para priorizar os que usam o mesmo material da linha atual.
   List<EstoqueFilamento> _carreteisOrdenadosParaCor(int i) {
     final materialAtual =
         i < _corMaterialList.length ? _corMaterialList[i].trim() : '';
@@ -289,6 +321,7 @@ class _CalculatorScreenState extends State<CalculatorScreen>
     return lista;
   }
 
+  /// Aplica um item do estoque a uma linha de material extra.
   void _aplicarMaterialExtraDoEstoque(int i, String? id) {
     setState(() {
       if (i >= _extraEstoqueSelecionadoIdList.length) return;
@@ -304,6 +337,7 @@ class _CalculatorScreenState extends State<CalculatorScreen>
     _update();
   }
 
+  /// Recalcula o custo do material extra com base na quantidade e no item de estoque.
   void _recalcularCustoExtraDoEstoque(int i) {
     if (i >= _extraEstoqueSelecionadoIdList.length ||
         i >= _extraValorCtrlList.length ||
@@ -323,7 +357,9 @@ class _CalculatorScreenState extends State<CalculatorScreen>
     _extraValorCtrlList[i].text = _fmtP(custo);
   }
 
+  /// Sincroniza o estado interno do modelo com os campos de formulario visiveis.
   void _update() {
+    /// Adiciona uma nova linha de cor no modo multicor.
     setState(() {
       _model.nomePeca = _nomePecaCtrl.text;
       _model.custoPorKg = double.tryParse(_custoPorKgCtrl.text) ?? 0;
@@ -363,6 +399,7 @@ class _CalculatorScreenState extends State<CalculatorScreen>
     _agendarSalvarPreferencias();
   }
 
+  /// Adiciona uma nova linha de cor no modo multicor.
   void _addCor() {
     setState(() {
       _corNomeCtrlList.add(TextEditingController());
@@ -374,6 +411,7 @@ class _CalculatorScreenState extends State<CalculatorScreen>
     });
   }
 
+  /// Remove uma linha de cor e descarta seus controllers.
   void _removeCor(int i) {
     setState(() {
       _corNomeCtrlList[i].dispose();
@@ -388,6 +426,7 @@ class _CalculatorScreenState extends State<CalculatorScreen>
     });
   }
 
+  /// Adiciona uma nova linha de material extra.
   void _addExtra() => setState(() {
         _extraNomeCtrlList.add(TextEditingController());
         _extraValorCtrlList.add(TextEditingController());
@@ -395,6 +434,7 @@ class _CalculatorScreenState extends State<CalculatorScreen>
         _extraEstoqueSelecionadoIdList.add(null);
       });
 
+  /// Remove uma linha de material extra e descarta seus controllers.
   void _removeExtra(int i) {
     setState(() {
       _extraNomeCtrlList[i].dispose();
@@ -408,6 +448,7 @@ class _CalculatorScreenState extends State<CalculatorScreen>
     });
   }
 
+  /// Limpa os campos da peca atual sem apagar as preferencias fixas.
   void _resetAll() {
     showDialog(
         context: context,
@@ -464,6 +505,7 @@ class _CalculatorScreenState extends State<CalculatorScreen>
                 ]));
   }
 
+  /// Restaura um calculo salvo no historico para o estado atual da calculadora.
   void _carregarModel(CalculatorModel m) {
     setState(() {
       _nomePecaCtrl.text = m.nomePeca;
@@ -530,6 +572,7 @@ class _CalculatorScreenState extends State<CalculatorScreen>
     });
   }
 
+  /// Salva o calculo atual no historico do app.
   Future<void> _salvarHistorico() async {
     _update();
     if (_model.custoTotalSemMargem <= 0) {
@@ -537,10 +580,12 @@ class _CalculatorScreenState extends State<CalculatorScreen>
           content: Text('Preencha ao menos um custo para salvar.')));
       return;
     }
+    final categoria = await _selecionarCategoriaHistorico();
     await HistoricoService.salvar(HistoricoItem(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         data: DateTime.now(),
-        model: CalculatorModel.fromJson(_model.toJson())));
+        model: CalculatorModel.fromJson(_model.toJson()),
+        categoria: categoria));
     if (mounted)
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('✅ Cálculo salvo no histórico!'),
@@ -548,6 +593,7 @@ class _CalculatorScreenState extends State<CalculatorScreen>
           duration: Duration(seconds: 2)));
   }
 
+  /// Cria uma receita rapida a partir do calculo atual e abre a tela de transacao.
   Future<void> _abrirNovaReceitaRapida() async {
     _update();
     if (_model.custoTotalSemMargem <= 0) {
@@ -564,10 +610,12 @@ class _CalculatorScreenState extends State<CalculatorScreen>
             _model.margemPersonalizada, plat.taxa, plat.taxaFixa)
         : _model.precoPersonalizadoComIVA;
 
+    final categoria = await _selecionarCategoriaHistorico();
     final item = HistoricoItem(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       data: DateTime.now(),
       model: CalculatorModel.fromJson(_model.toJson()),
+      categoria: categoria,
     );
     await HistoricoService.salvar(item);
 
@@ -588,6 +636,90 @@ class _CalculatorScreenState extends State<CalculatorScreen>
     );
   }
 
+  /// Permite escolher uma categoria para o historico antes de salvar o calculo.
+  Future<String> _selecionarCategoriaHistorico() async {
+    final categorias = await HistoricoService.carregarCategorias();
+    final novaCtrl = TextEditingController();
+    String selecionada = categorias.contains(HistoricoService.categoriaPadrao)
+        ? HistoricoService.categoriaPadrao
+        : categorias.isNotEmpty
+            ? categorias.first
+            : HistoricoService.categoriaPadrao;
+
+    final categoria = await showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Categoria do projeto'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Selecione uma categoria existente ou crie uma nova.',
+                  style: TextStyle(color: Colors.grey.shade700),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: categorias
+                      .map((cat) => ChoiceChip(
+                            label: Text(cat),
+                            selected: selecionada == cat,
+                            onSelected: (_) => setDialogState(() {
+                              selecionada = cat;
+                              novaCtrl.clear();
+                            }),
+                          ))
+                      .toList(),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: novaCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Nova categoria',
+                    hintText: 'Ex: Cliente A, Linha premium',
+                  ),
+                  onChanged: (value) => setDialogState(() {
+                    if (value.trim().isNotEmpty) {
+                      selecionada = value.trim();
+                    }
+                  }),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                final nova = novaCtrl.text.trim();
+                final categoriaFinal = nova.isNotEmpty ? nova : selecionada;
+                if (categoriaFinal.trim().isEmpty) {
+                  Navigator.pop(ctx, HistoricoService.categoriaPadrao);
+                  return;
+                }
+                await HistoricoService.salvarCategoria(categoriaFinal);
+                if (!ctx.mounted) return;
+                Navigator.pop(ctx, categoriaFinal);
+              },
+              child: const Text('Continuar'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    novaCtrl.dispose();
+    return categoria ?? HistoricoService.categoriaPadrao;
+  }
+
+  /// Monta a tela principal com a barra de abas e as acoes globais.
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -650,6 +782,7 @@ class _CalculatorScreenState extends State<CalculatorScreen>
 
   // ══ ABA 1 ══════════════════════════════════════════════════════════════════
 
+  /// Constrói a aba de entrada com todos os campos da peça, estoque e custos.
   Widget _buildInputTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
@@ -706,6 +839,8 @@ class _CalculatorScreenState extends State<CalculatorScreen>
                       ],
                       onChanged: _aplicarCarretelEstoque,
                     ),
+
+                    /// Constrói uma linha de cor no modo multicor, com estoque, material e custos.
                   ),
                   IconButton(
                     tooltip: 'Atualizar estoque',
@@ -1198,19 +1333,24 @@ class _CalculatorScreenState extends State<CalculatorScreen>
 
   // ══ ABA 2 ══════════════════════════════════════════════════════════════════
 
+  /// Constrói a aba de resultados com precos, lote e discriminacao de custos.
   Widget _buildResultsTab() {
     final plat = _model.plataformas.firstWhere((p) => p.ativa,
         orElse: () => PlataformaConfig(nome: '', taxa: 0));
     final temPlat = plat.nome.isNotEmpty;
     final revendaLocal = _plataformaEhRevendaLocal(plat);
 
+    // Preco final considerando margem e, quando existir, a taxa da plataforma.
     double precoPlat(double m) => temPlat
         ? _model.precoComPlataforma(m, plat.taxa, plat.taxaFixa)
         : _model.precoComMargemEIVA(m);
+    // Preco liquido que sobra depois do calculo de margem e IVA.
     double precoLiquido(double m) => _model.precoComMargemEIVA(m);
+    // Texto principal mostrado nos cards de preco.
     String labelPrincipal() => temPlat
         ? (revendaLocal ? 'Ele vende por' : 'Preço final ao cliente')
         : 'Preço com IVA';
+    // Texto secundario mostrado nos cards quando ha plataforma ativa.
     String labelSecundario() => temPlat
         ? (revendaLocal ? 'Você vende para ele por' : 'Você recebe líquido')
         : '';
@@ -1237,6 +1377,8 @@ class _CalculatorScreenState extends State<CalculatorScreen>
             child:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               const Text('Custo Total',
+
+                  /// Identifica se a plataforma ativa representa uma revenda ou parceiro local.
                   style: TextStyle(color: Colors.white70, fontSize: 13)),
               const SizedBox(height: 4),
               Text(_fmt(_model.custoTotalSemMargem),
@@ -1527,6 +1669,7 @@ class _CalculatorScreenState extends State<CalculatorScreen>
         nome.contains('vendedor');
   }
 
+  /// Constrói a grade com os indicadores de custo, receita e lucro do lote.
   Widget _buildLoteGrid(PlataformaConfig plat, bool temPlat) {
     final margem = _model.margemPersonalizada;
     final precoUnit = temPlat
@@ -1587,6 +1730,7 @@ class _CalculatorScreenState extends State<CalculatorScreen>
     ]);
   }
 
+  /// Monta um card resumido usado nos indicadores do lote.
   Widget _loteCard(String label, String valor, String sub, Color color) =>
       Container(
           padding: const EdgeInsets.all(12),
@@ -1608,6 +1752,7 @@ class _CalculatorScreenState extends State<CalculatorScreen>
             Text(sub, style: const TextStyle(fontSize: 11, color: Colors.grey)),
           ]));
 
+  /// Cria um botao pequeno de aumento ou reducao da quantidade do lote.
   Widget _qtyBtn(IconData icon, VoidCallback onTap) => InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
@@ -1621,6 +1766,7 @@ class _CalculatorScreenState extends State<CalculatorScreen>
 
   // ── Helpers ──────────────────────────────────────────────────────────────
 
+  /// Monta um switch com icone, titulo e subtitulo padronizados.
   Widget _switchRow(IconData icon, Color iconColor, String label,
           String subtitle, bool value, ValueChanged<bool> onChanged) =>
       Container(
@@ -1645,6 +1791,7 @@ class _CalculatorScreenState extends State<CalculatorScreen>
               activeColor: iconColor,
               onChanged: onChanged));
 
+  /// Monta o dropdown padrao de material para escolha manual do filamento.
   Widget _matDropdown(String value, ValueChanged<String?> onChanged,
           {Color? accent}) =>
       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1670,6 +1817,7 @@ class _CalculatorScreenState extends State<CalculatorScreen>
                     onChanged: onChanged))),
       ]);
 
+  /// Cria um campo pequeno reutilizavel para valores curtos e monetarios.
   Widget _miniTF(
           TextEditingController ctrl, String hint, TextInputType? keyboard,
           {String? suffix, Color borderColor = const Color(0xFF6C3CE1)}) =>
@@ -1704,5 +1852,6 @@ class _CalculatorScreenState extends State<CalculatorScreen>
                   borderRadius: BorderRadius.circular(10),
                   borderSide: BorderSide(color: borderColor, width: 1.8))));
 
+  /// Formata valores monetarios no padrao R$ 0,00.
   String _fmt(double v) => 'R\$ ${v.toStringAsFixed(2).replaceAll('.', ',')}';
 }

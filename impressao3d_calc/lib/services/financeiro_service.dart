@@ -4,13 +4,31 @@ import '../models/calculator_model.dart';
 import '../models/financeiro_model.dart';
 import '../services/historico_service.dart';
 
+/// Serviço central de persistência e regras financeiras.
+///
+/// Responsabilidades principais:
+/// - Persistir e recuperar transações financeiras.
+/// - Gerenciar estoque de filamentos e materiais extras (CRUD).
+/// - Registrar usos de materiais e aplicar/reverter baixas de estoque
+///   quando vendas de peça são criadas/atualizadas/removidas.
+/// - Fornecer resumos e agregações para a UI.
 class FinanceiroService {
+  /// Chave em `SharedPreferences` para transações.
   static const _keyTransacoes = 'financeiro_transacoes';
+
+  /// Chave para o estoque de filamentos.
   static const _keyEstoque = 'financeiro_estoque';
+
+  /// Chave para o registro de usos de filamento.
   static const _keyUsos = 'financeiro_usos';
+
+  /// Chave para o estoque de materiais extras.
   static const _keyEstoqueMateriaisExtras = 'financeiro_estoque_materiais';
+
+  /// Chave para o registro de usos de materiais extras.
   static const _keyUsosMateriaisExtras = 'financeiro_usos_materiais';
 
+  /// Carrega todas as transacoes salvas, ordenando da mais recente para a mais antiga.
   static Future<List<Transacao>> carregarTransacoes() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_keyTransacoes);
@@ -25,60 +43,123 @@ class FinanceiroService {
     }
   }
 
+  /// Adiciona uma transacao nova na lista persistida.
   static Future<void> salvarTransacao(Transacao t) async {
     final lista = await carregarTransacoes();
     lista.insert(0, t);
     await _persistirTransacoes(lista);
   }
 
+  /// Verifica se a transacao representa uma venda de peca.
   static bool _isVendaDePeca(Transacao t) =>
       t.tipo == TipoTransacao.receita && t.categoria == 'Venda de peça';
 
+  /// Remove dos carretels o consumo ligado a uma transacao especifica.
+  static void _reverterUsosFilamentoDaTransacao(
+    List<EstoqueFilamento> estoque,
+    List<UsoFilamento> usos,
+    String idTransacao,
+  ) {
+    for (final uso in usos.where((u) => u.idTransacao == idTransacao)) {
+      final idx = estoque.indexWhere((e) => e.id == uso.idEstoque);
+      if (idx >= 0) {
+        estoque[idx].pesoUsadoG = (estoque[idx].pesoUsadoG - uso.pesoUsadoG)
+            .clamp(0, double.infinity);
+      }
+    }
+  }
+
+  /// Reverte o consumo de materiais extras vinculado a uma transacao.
+  static void _reverterUsosMateriaisExtrasDaTransacao(
+    List<EstoqueMaterialExtra> estoque,
+    List<UsoMaterialExtra> usos,
+    String idTransacao,
+  ) {
+    for (final uso in usos.where((u) => u.idTransacao == idTransacao)) {
+      final idx = estoque.indexWhere((e) => e.id == uso.idEstoqueMaterialExtra);
+      if (idx >= 0) {
+        final novoUso = estoque[idx].quantidadeUsada - uso.quantidadeUsada;
+        estoque[idx].quantidadeUsada = novoUso < 0 ? 0 : novoUso;
+      }
+    }
+  }
+
+  /// Normaliza a lista de itens de venda aceitando os formatos suportados pela tela e pelos dados persistidos.
   static List<VendaPedidoItem> _itensDaVenda(Transacao transacao,
-      {HistoricoItem? historico, int? quantidade, List<VendaPedidoItem>? itensVenda}) {
+      {HistoricoItem? historico,
+      int? quantidade,
+      List<VendaPedidoItem>? itensVenda}) {
     if (itensVenda != null && itensVenda.isNotEmpty) {
       return itensVenda
-          .where((item) => item.idHistorico.trim().isNotEmpty && item.quantidade > 0)
+          .where((item) =>
+              item.idHistorico.trim().isNotEmpty && item.quantidade > 0)
           .toList();
     }
 
     if (transacao.itensVenda.isNotEmpty) {
       return transacao.itensVenda
-          .where((item) => item.idHistorico.trim().isNotEmpty && item.quantidade > 0)
+          .where((item) =>
+              item.idHistorico.trim().isNotEmpty && item.quantidade > 0)
           .toList();
     }
 
     if (historico != null && quantidade != null && quantidade > 0) {
-      return [VendaPedidoItem(
-        idHistorico: historico.id,
-        nomeHistorico:
-            historico.model.nomePeca.isNotEmpty ? historico.model.nomePeca : 'Sem nome',
-        quantidade: quantidade,
-      )];
+      return [
+        VendaPedidoItem(
+          idHistorico: historico.id,
+          nomeHistorico: historico.model.nomePeca.isNotEmpty
+              ? historico.model.nomePeca
+              : 'Sem nome',
+          quantidade: quantidade,
+        )
+      ];
     }
 
     if (transacao.idHistorico != null &&
         transacao.idHistorico!.isNotEmpty &&
         (transacao.quantidadePecas ?? 0) > 0) {
-      return [VendaPedidoItem(
-        idHistorico: transacao.idHistorico!,
-        nomeHistorico:
-            transacao.nomeHistorico?.isNotEmpty == true ? transacao.nomeHistorico! : 'Sem nome',
-        quantidade: transacao.quantidadePecas!,
-      )];
+      return [
+        VendaPedidoItem(
+          idHistorico: transacao.idHistorico!,
+          nomeHistorico: transacao.nomeHistorico?.isNotEmpty == true
+              ? transacao.nomeHistorico!
+              : 'Sem nome',
+          quantidade: transacao.quantidadePecas!,
+        )
+      ];
     }
 
     return const [];
   }
 
+  /// Calcula quantos gramas de cada material serao necessarios para um projeto.
   static Map<String, double> calcularNecessidadePorMaterial(
           HistoricoItem historico, int quantidade) =>
       _calcularNecessidadePorMaterial(historico, quantidade);
 
+  /// Calcula quantas unidades de materiais extras serao necessarias para um projeto.
   static Map<String, int> calcularNecessidadeMateriaisExtras(
           HistoricoItem historico, int quantidade) =>
       _calcularNecessidadeMateriaisExtras(historico, quantidade);
 
+  /// Salva ou atualiza uma venda de peca, aplicando baixa de estoque e registrando os usos.
+  /// Salva ou atualiza uma venda de peça (transação do tipo `Venda de peça`).
+  ///
+  /// Regras importantes:
+  /// - Valida disponibilidade de filamento e materiais extras antes de aplicar.
+  /// - O consumo de filamento é aplicado seguindo política FIFO: o código
+  ///   ordena o estoque por `dataCompra` ascendente (`estoqueOrdenado`) e
+  ///   consome de cada carretel até suprir a necessidade (usa `pesoRestanteG`).
+  /// - Para cada uso de filamento ou material extra é criado um registro de
+  ///   uso (`UsoFilamento` / `UsoMaterialExtra`) contendo `idTransacao` para
+  ///   permitir reversão futura.
+  /// - Os IDs dos usos são gerados a partir do timestamp atual em
+  ///   microsegundos somado a um sufixo de sequência: `'<microseconds>_<seq>'`.
+  ///   Observação: este formato é apenas heurístico para garantir unicidade
+  ///   razoável; em cenários de concorrência forte considere usar UUIDs.
+  ///
+  /// Se `transacaoAnterior` for fornecida, os usos previamente aplicados
+  /// vinculados a essa transação são revertidos antes de aplicar os novos usos.
   static Future<String?> salvarOuAtualizarVendaDePeca({
     required Transacao transacao,
     HistoricoItem? historico,
@@ -103,39 +184,18 @@ class FinanceiroService {
       for (final itemHistorico in historicos) itemHistorico.id: itemHistorico,
     };
     final descricaoVenda = itens
-        .map((item) => item.nomeHistorico.isNotEmpty ? item.nomeHistorico : 'Sem nome')
+        .map((item) =>
+            item.nomeHistorico.isNotEmpty ? item.nomeHistorico : 'Sem nome')
         .join(', ');
     final resumoVenda = transacao.descricao.isNotEmpty
         ? transacao.descricao
         : 'Venda de peça: $descricaoVenda';
 
     final idAnterior = transacaoAnterior?.id;
-    final usosAnterioresDaTransacao = idAnterior == null
-        ? <UsoFilamento>[]
-        : usos.where((u) => u.idTransacao == idAnterior).toList();
-    final usosMateriaisAnterioresDaTransacao = idAnterior == null
-        ? <UsoMaterialExtra>[]
-        : usosMateriaisExtras
-            .where((u) => u.idTransacao == idAnterior)
-            .toList();
-
-    for (final uso in usosAnterioresDaTransacao) {
-      final idx = estoqueOrdenado.indexWhere((e) => e.id == uso.idEstoque);
-      if (idx >= 0) {
-        estoqueOrdenado[idx].pesoUsadoG =
-            (estoqueOrdenado[idx].pesoUsadoG - uso.pesoUsadoG)
-                .clamp(0, double.infinity);
-      }
-    }
-
-    for (final uso in usosMateriaisAnterioresDaTransacao) {
-      final idx = estoqueMateriaisExtras
-          .indexWhere((e) => e.id == uso.idEstoqueMaterialExtra);
-      if (idx >= 0) {
-        final novoUso =
-            estoqueMateriaisExtras[idx].quantidadeUsada - uso.quantidadeUsada;
-        estoqueMateriaisExtras[idx].quantidadeUsada = novoUso < 0 ? 0 : novoUso;
-      }
+    if (idAnterior != null) {
+      _reverterUsosFilamentoDaTransacao(estoqueOrdenado, usos, idAnterior);
+      _reverterUsosMateriaisExtrasDaTransacao(
+          estoqueMateriaisExtras, usosMateriaisExtras, idAnterior);
     }
 
     final novosUsos = <UsoFilamento>[];
@@ -145,6 +205,8 @@ class FinanceiroService {
     final necessidadesPorMaterial = <String, double>{};
     final necessidadesPorExtra = <String, int>{};
 
+    // Para cada item vendido, calcula a necessidade por material/extras e
+    // aloca consumos obedecendo a política FIFO sobre `estoqueOrdenado`.
     for (final item in itens) {
       final historicoItem = historicosPorId[item.idHistorico];
       if (historicoItem == null) {
@@ -210,6 +272,9 @@ class FinanceiroService {
           if (disponivel <= 0) continue;
           final usar = restante < disponivel ? restante : disponivel;
           carretel.pesoUsadoG += usar;
+          // ID do uso: timestamp em microsegundos + sufixo de sequência.
+          // O sufixo tenta evitar colisões quando múltiplos usos são
+          // gerados no mesmo microssegundo dentro deste loop.
           novosUsos.add(UsoFilamento(
             id: '${agora.microsecondsSinceEpoch}_$seq++',
             idEstoque: carretel.id,
@@ -226,10 +291,12 @@ class FinanceiroService {
       for (final entry in necessidadeMateriaisExtras.entries) {
         final idMaterial = entry.key;
         final necessario = entry.value;
-        final idx = estoqueMateriaisExtras.indexWhere((e) => e.id == idMaterial);
+        final idx =
+            estoqueMateriaisExtras.indexWhere((e) => e.id == idMaterial);
         if (idx < 0 || necessario <= 0) continue;
 
         estoqueMateriaisExtras[idx].quantidadeUsada += necessario;
+        // ID gerado de forma semelhante para usos de material extra.
         novosUsosMateriaisExtras.add(UsoMaterialExtra(
           id: '${agora.microsecondsSinceEpoch}_$seq++',
           idEstoqueMaterialExtra: idMaterial,
@@ -261,6 +328,7 @@ class FinanceiroService {
     return null;
   }
 
+  /// Calcula a necessidade de materiais extras de um historico multiplicando por quantidade.
   static Map<String, int> _calcularNecessidadeMateriaisExtras(
       HistoricoItem historico, int quantidade) {
     if (quantidade <= 0) return const {};
@@ -280,6 +348,7 @@ class FinanceiroService {
     return necessidade;
   }
 
+  /// Calcula a necessidade de filamento de um historico em mono ou multicor.
   static Map<String, double> _calcularNecessidadePorMaterial(
       HistoricoItem historico, int quantidade) {
     final model = historico.model;
@@ -303,39 +372,23 @@ class FinanceiroService {
     return necessidade;
   }
 
+  /// Remove uma transacao e desfaz os efeitos dela em estoque e usos vinculados.
   static Future<void> removerTransacao(String id) async {
     final lista = await carregarTransacoes();
     lista.removeWhere((t) => t.id == id);
     final usos = await carregarUsos();
-    final usosDaTransacao = usos.where((u) => u.idTransacao == id).toList();
     final usosMateriais = await carregarUsosMateriaisExtras();
-    final usosMateriaisDaTransacao =
-        usosMateriais.where((u) => u.idTransacao == id).toList();
-
-    if (usosDaTransacao.isNotEmpty) {
+    if (usos.any((u) => u.idTransacao == id)) {
       final estoque = await carregarEstoque();
-      for (final uso in usosDaTransacao) {
-        final idx = estoque.indexWhere((e) => e.id == uso.idEstoque);
-        if (idx >= 0) {
-          estoque[idx].pesoUsadoG = (estoque[idx].pesoUsadoG - uso.pesoUsadoG)
-              .clamp(0, double.infinity);
-        }
-      }
+      _reverterUsosFilamentoDaTransacao(estoque, usos, id);
       await _persistirEstoque(estoque);
       await _persistirUsos(usos.where((u) => u.idTransacao != id).toList());
     }
 
-    if (usosMateriaisDaTransacao.isNotEmpty) {
+    if (usosMateriais.any((u) => u.idTransacao == id)) {
       final estoqueMateriais = await carregarEstoqueMateriaisExtras();
-      for (final uso in usosMateriaisDaTransacao) {
-        final idx = estoqueMateriais
-            .indexWhere((e) => e.id == uso.idEstoqueMaterialExtra);
-        if (idx >= 0) {
-          final novoUso =
-              estoqueMateriais[idx].quantidadeUsada - uso.quantidadeUsada;
-          estoqueMateriais[idx].quantidadeUsada = novoUso < 0 ? 0 : novoUso;
-        }
-      }
+      _reverterUsosMateriaisExtrasDaTransacao(
+          estoqueMateriais, usosMateriais, id);
       await _persistirEstoqueMateriaisExtras(estoqueMateriais);
       await _persistirUsosMateriaisExtras(
           usosMateriais.where((u) => u.idTransacao != id).toList());
@@ -344,6 +397,7 @@ class FinanceiroService {
     await _persistirTransacoes(lista);
   }
 
+  /// Salva uma transacao normal ou uma venda de peca, aplicando as regras de estoque quando necessario.
   static Future<String?> salvarTransacaoComRegraDeEstoque({
     required Transacao transacao,
     required Transacao? transacaoAnterior,
@@ -375,18 +429,10 @@ class FinanceiroService {
       transacoes.removeWhere((t) => t.id == transacaoAnterior.id);
       if (vendaAnterior) {
         final usos = await carregarUsos();
-        final usosDaTransacao =
-            usos.where((u) => u.idTransacao == transacaoAnterior.id).toList();
-        if (usosDaTransacao.isNotEmpty) {
+        if (usos.any((u) => u.idTransacao == transacaoAnterior.id)) {
           final estoque = await carregarEstoque();
-          for (final uso in usosDaTransacao) {
-            final idx = estoque.indexWhere((e) => e.id == uso.idEstoque);
-            if (idx >= 0) {
-              estoque[idx].pesoUsadoG =
-                  (estoque[idx].pesoUsadoG - uso.pesoUsadoG)
-                      .clamp(0, double.infinity);
-            }
-          }
+          _reverterUsosFilamentoDaTransacao(
+              estoque, usos, transacaoAnterior.id);
           await _persistirEstoque(estoque);
           await _persistirUsos(usos
               .where((u) => u.idTransacao != transacaoAnterior.id)
@@ -394,20 +440,10 @@ class FinanceiroService {
         }
 
         final usosMateriais = await carregarUsosMateriaisExtras();
-        final usosMateriaisDaTransacao = usosMateriais
-            .where((u) => u.idTransacao == transacaoAnterior.id)
-            .toList();
-        if (usosMateriaisDaTransacao.isNotEmpty) {
+        if (usosMateriais.any((u) => u.idTransacao == transacaoAnterior.id)) {
           final estoqueMateriais = await carregarEstoqueMateriaisExtras();
-          for (final uso in usosMateriaisDaTransacao) {
-            final idx = estoqueMateriais
-                .indexWhere((e) => e.id == uso.idEstoqueMaterialExtra);
-            if (idx >= 0) {
-              final novoUso =
-                  estoqueMateriais[idx].quantidadeUsada - uso.quantidadeUsada;
-              estoqueMateriais[idx].quantidadeUsada = novoUso < 0 ? 0 : novoUso;
-            }
-          }
+          _reverterUsosMateriaisExtrasDaTransacao(
+              estoqueMateriais, usosMateriais, transacaoAnterior.id);
           await _persistirEstoqueMateriaisExtras(estoqueMateriais);
           await _persistirUsosMateriaisExtras(usosMateriais
               .where((u) => u.idTransacao != transacaoAnterior.id)
@@ -421,12 +457,14 @@ class FinanceiroService {
     return null;
   }
 
+  /// Persiste a lista completa de transacoes em SharedPreferences.
   static Future<void> _persistirTransacoes(List<Transacao> lista) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
         _keyTransacoes, jsonEncode(lista.map((t) => t.toJson()).toList()));
   }
 
+  /// Carrega o estoque de carretels de filamento.
   static Future<List<EstoqueFilamento>> carregarEstoque() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_keyEstoque);
@@ -441,6 +479,7 @@ class FinanceiroService {
     }
   }
 
+  /// Salva ou atualiza um carretel no estoque de filamento.
   static Future<void> salvarCarretel(EstoqueFilamento e) async {
     final lista = await carregarEstoque();
     final idx = lista.indexWhere((x) => x.id == e.id);
@@ -451,6 +490,7 @@ class FinanceiroService {
     await _persistirEstoque(lista);
   }
 
+  /// Remove um carretel e apaga os usos vinculados a ele.
   static Future<void> removerCarretel(String id) async {
     final lista = await carregarEstoque();
     lista.removeWhere((e) => e.id == id);
@@ -460,12 +500,14 @@ class FinanceiroService {
     await _persistirUsos(usos);
   }
 
+  /// Persiste o estoque de filamentos.
   static Future<void> _persistirEstoque(List<EstoqueFilamento> lista) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
         _keyEstoque, jsonEncode(lista.map((e) => e.toJson()).toList()));
   }
 
+  /// Carrega o estoque de materiais extras.
   static Future<List<EstoqueMaterialExtra>>
       carregarEstoqueMateriaisExtras() async {
     final prefs = await SharedPreferences.getInstance();
@@ -481,6 +523,7 @@ class FinanceiroService {
     }
   }
 
+  /// Salva ou atualiza um item de material extra no estoque.
   static Future<void> salvarMaterialExtra(EstoqueMaterialExtra e) async {
     final lista = await carregarEstoqueMateriaisExtras();
     final idx = lista.indexWhere((x) => x.id == e.id);
@@ -492,6 +535,7 @@ class FinanceiroService {
     await _persistirEstoqueMateriaisExtras(lista);
   }
 
+  /// Remove um material extra e apaga os usos vinculados a ele.
   static Future<void> removerMaterialExtra(String id) async {
     final lista = await carregarEstoqueMateriaisExtras();
     lista.removeWhere((e) => e.id == id);
@@ -502,6 +546,7 @@ class FinanceiroService {
     await _persistirUsosMateriaisExtras(usos);
   }
 
+  /// Persiste o estoque de materiais extras.
   static Future<void> _persistirEstoqueMateriaisExtras(
       List<EstoqueMaterialExtra> lista) async {
     final prefs = await SharedPreferences.getInstance();
@@ -509,6 +554,7 @@ class FinanceiroService {
         jsonEncode(lista.map((e) => e.toJson()).toList()));
   }
 
+  /// Carrega os usos de filamento registrados.
   static Future<List<UsoFilamento>> carregarUsos() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_keyUsos);
@@ -523,6 +569,7 @@ class FinanceiroService {
     }
   }
 
+  /// Registra um novo uso de filamento e atualiza o estoque correspondente.
   static Future<void> registrarUso(UsoFilamento uso) async {
     final usos = await carregarUsos();
     usos.insert(0, uso);
@@ -535,6 +582,7 @@ class FinanceiroService {
     }
   }
 
+  /// Remove um uso de filamento e devolve a quantidade ao estoque.
   static Future<void> removerUso(UsoFilamento uso) async {
     final usos = await carregarUsos();
     usos.removeWhere((u) => u.id == uso.id);
@@ -548,12 +596,14 @@ class FinanceiroService {
     }
   }
 
+  /// Persiste a lista de usos de filamento.
   static Future<void> _persistirUsos(List<UsoFilamento> lista) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
         _keyUsos, jsonEncode(lista.map((u) => u.toJson()).toList()));
   }
 
+  /// Carrega os usos de materiais extras registrados.
   static Future<List<UsoMaterialExtra>> carregarUsosMateriaisExtras() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_keyUsosMateriaisExtras);
@@ -568,6 +618,7 @@ class FinanceiroService {
     }
   }
 
+  /// Registra um novo uso de material extra e atualiza o estoque correspondente.
   static Future<void> registrarUsoMaterialExtra(UsoMaterialExtra uso) async {
     final usos = await carregarUsosMateriaisExtras();
     usos.insert(0, uso);
@@ -581,6 +632,7 @@ class FinanceiroService {
     }
   }
 
+  /// Remove um uso de material extra e devolve a quantidade ao estoque.
   static Future<void> removerUsoMaterialExtra(UsoMaterialExtra uso) async {
     final usos = await carregarUsosMateriaisExtras();
     usos.removeWhere((u) => u.id == uso.id);
@@ -595,6 +647,7 @@ class FinanceiroService {
     }
   }
 
+  /// Persiste a lista de usos de materiais extras.
   static Future<void> _persistirUsosMateriaisExtras(
       List<UsoMaterialExtra> lista) async {
     final prefs = await SharedPreferences.getInstance();
@@ -602,6 +655,7 @@ class FinanceiroService {
         jsonEncode(lista.map((u) => u.toJson()).toList()));
   }
 
+  /// Soma receitas, despesas e saldo do mes selecionado.
   static Map<String, double> resumoMes(
       List<Transacao> todas, int ano, int mes) {
     final f = todas.where((t) => t.data.year == ano && t.data.month == mes);
@@ -614,6 +668,7 @@ class FinanceiroService {
     return {'receitas': r, 'despesas': d, 'saldo': r - d};
   }
 
+  /// Soma receitas, despesas e saldo de todo o historico.
   static Map<String, double> resumoGeral(List<Transacao> todas) {
     final r = todas
         .where((t) => t.tipo == TipoTransacao.receita)
@@ -624,6 +679,7 @@ class FinanceiroService {
     return {'receitas': r, 'despesas': d, 'saldo': r - d};
   }
 
+  /// Monta um historico agregado dos ultimos seis meses.
   static List<Map<String, dynamic>> historico6Meses(List<Transacao> todas) {
     final now = DateTime.now();
     return List.generate(6, (i) {
@@ -638,6 +694,7 @@ class FinanceiroService {
     });
   }
 
+  /// Agrupa as despesas por categoria dentro de um mes.
   static Map<String, double> despesasPorCategoria(
       List<Transacao> todas, int ano, int mes) {
     final mapa = <String, double>{};
