@@ -43,3 +43,34 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Recommended additions for Flutter projects
+# Dart & Flutter
+.packages
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Local environment / secrets
+.env
+local.properties
+android/key.properties
+*.jks
+*.keystore
+
+# Gradle
+/.gradle
+/android/.gradle
+/android/**/build/
+
+# iOS / Xcode
+/ios/Pods/
+/ios/Runner.xcworkspace/
+/ios/.symlinks/
+/ios/Flutter/Flutter.framework
+**/DerivedData/
+
+# VS Code settings (uncomment if you want to version .vscode config)
+.vscode/
+
+# Firebase / Google services (sensitive) - remove from repo and keep a template
+/android/app/google-services.json
